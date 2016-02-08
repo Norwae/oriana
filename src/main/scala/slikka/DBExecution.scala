@@ -1,6 +1,6 @@
 package slikka
 
-import akka.actor.{ActorRef, Actor}
+import akka.actor.{Props, ActorRef, Actor}
 
 
 import scala.collection.mutable
@@ -9,13 +9,12 @@ import scala.util.control.NonFatal
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class DBExecution[DBContext <: DatabaseContext : Manifest, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule) extends Actor {
+class DBExecution[DBContext <: DatabaseContext, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule, target: ActorRef) extends Actor {
   var retryCount = 0
   val exceptions = mutable.Buffer[Throwable]()
 
   override def receive = {
     case Start(ctx) =>
-      val target = sender()
       operation(ctx.asInstanceOf[DBContext]) onComplete {
         case fail@Failure(Retryable(NonFatal(e))) =>
           retrySchedule.retryDelay(retryCount) match {
@@ -25,15 +24,19 @@ class DBExecution[DBContext <: DatabaseContext : Manifest, T](operation: DBOpera
               context.system.scheduler.scheduleOnce(delay, self, Start(ctx))
             case None =>
               exceptions.foreach(e.addSuppressed)
-              reportCalculationResult(target, fail)
+              reportCalculationResult(fail)
           }
-        case x: Failure[T] => reportCalculationResult(target, x)
-        case Success(value) => reportCalculationResult(target, value)
+        case x: Failure[T] => reportCalculationResult(x)
+        case Success(value) => reportCalculationResult(value)
       }
   }
 
-  private def reportCalculationResult(target: ActorRef, value: Any): Unit = {
+  private def reportCalculationResult(value: Any): Unit = {
     target ! value
     context.stop(self)
   }
+}
+
+object DBExecution {
+  def props[DBContext <: DatabaseContext, T](op: DBOperation[DBContext, T], schedule: RetrySchedule, target: ActorRef) = Props(new DBExecution[DBContext, T](op, schedule, target))
 }
