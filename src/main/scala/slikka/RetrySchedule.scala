@@ -1,5 +1,0 @@
-package slikka
-
-trait RetrySchedule {
-
-}
