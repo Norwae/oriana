@@ -1,3 +1,3 @@
 package slikka
 
-trait DBInitializer extends DBOperation[DatabaseContext, Unit]
+trait DBInitializer extends DBOperation[ExecutableDatabaseContext, Unit]

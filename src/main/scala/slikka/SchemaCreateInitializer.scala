@@ -6,7 +6,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 
 object SchemaCreateInitializer extends DBInitializer {
-  override def apply(ctx: DatabaseContext) = {
+  override def apply(ctx: ExecutableDatabaseContext) = {
     import ctx.api._
     val tableCreations = ctx.allTables map { table =>
       val query = table.query

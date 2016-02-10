@@ -1,10 +1,11 @@
 package slikka
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Props, Actor, ActorRef}
+import com.typesafe.config.Config
 
 import scala.collection.mutable
 
-class DatabaseActor(dbAccess: DatabaseContext) extends Actor {
+class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
   import DatabaseActor._
 
   var schedule: RetrySchedule = DefaultSchedule
@@ -16,7 +17,7 @@ class DatabaseActor(dbAccess: DatabaseContext) extends Actor {
   }
 
   val bufferOperation: Receive = {
-    case op: DBOperation[_,_] =>
+    case op: DBOperation[_, _] =>
       val prepped = prepareOperation(op, NoRetrySchedule, sender())
       waiting += prepped
     case tr: DBTransaction[_, _, _, _] =>
@@ -57,4 +58,6 @@ class DatabaseActor(dbAccess: DatabaseContext) extends Actor {
 object DatabaseActor {
   case object Init
   private [slikka] case object InitComplete
+
+  def props(ctx: ExecutableDatabaseContext) = Props(new DatabaseActor(ctx))
 }

@@ -9,7 +9,7 @@ import scala.util.control.NonFatal
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class DBExecution[DBContext <: DatabaseContext, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule, target: ActorRef) extends Actor {
+class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule, target: ActorRef) extends Actor {
   var retryCount = 0
   val exceptions = mutable.Buffer[Throwable]()
 
@@ -38,5 +38,5 @@ class DBExecution[DBContext <: DatabaseContext, T](operation: DBOperation[DBCont
 }
 
 object DBExecution {
-  def props[DBContext <: DatabaseContext, T](op: DBOperation[DBContext, T], schedule: RetrySchedule, target: ActorRef) = Props(new DBExecution[DBContext, T](op, schedule, target))
+  def props[DBContext <: ExecutableDatabaseContext, T](op: DBOperation[DBContext, T], schedule: RetrySchedule, target: ActorRef) = Props(new DBExecution[DBContext, T](op, schedule, target))
 }
