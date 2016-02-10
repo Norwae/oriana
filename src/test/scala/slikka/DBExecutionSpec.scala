@@ -2,7 +2,7 @@ package slikka
 
 import java.util.UUID
 
-import akka.actor.Props
+import akka.actor.{ActorRefFactory, Props}
 import akka.pattern.ask
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 
@@ -16,17 +16,15 @@ import scala.concurrent.duration._
 import scala.concurrent.Future
 
 class DBExecutionSpec extends FlatSpec with TestActorSystem with ScalaFutures with ShouldMatchers {
-
+  import DBExecutionSpec._
   "the db execution actor" should "execute its operation when signaled" in {
     val token = UUID.randomUUID()
-    val captor = system.actorOf(Props[SingleMessageCaptor])
-    val execution = system.actorOf(DBExecution.props({ _ : ExecutableDatabaseContext =>
+
+    val result = performOperationViaExecutionActor() { _ : ExecutableDatabaseContext =>
       Future.successful(token)
-    }, NoRetrySchedule, captor))
+    }
 
-    execution ! Start(null)
-
-    whenReady(captor ? SingleMessageCaptor.Read) { sendToken =>
+    whenReady(result) { sendToken =>
       sendToken shouldEqual token
     }
   }
@@ -34,59 +32,51 @@ class DBExecutionSpec extends FlatSpec with TestActorSystem with ScalaFutures wi
   it should "retry its operation when prompted" in {
     var attempted = false
     val token = UUID.randomUUID()
-    val captor = system.actorOf(Props[SingleMessageCaptor])
-    val execution = system.actorOf(DBExecution.props({ _ : ExecutableDatabaseContext =>
+
+    val result = performOperationViaExecutionActor(10.millis){ _ : ExecutableDatabaseContext =>
       if (!attempted) {
         attempted = true
         Future.failed(new NoSuchElementException)
       }
       else Future.successful(token)
-    }, DefaultSchedule, captor))
+    }
 
-    execution ! Start(null)
-
-    whenReady(captor ? SingleMessageCaptor.Read, Timeout(250.millis)) { sendToken =>
+    whenReady(result) { sendToken =>
       sendToken shouldEqual token
     }
   }
 
+
   it should "delay its retries as defined in the policy" in {
-    val fuzzFactor = 15
     val delays = mutable.Buffer[Int]()
-    val policy = new FixedRetrySchedule(100.millis, 200.millis, 400.millis)
     val token = UUID.randomUUID()
-    val captor = system.actorOf(Props[SingleMessageCaptor])
     val start = System.nanoTime()
 
-    val execution = system.actorOf(DBExecution.props({ _ : ExecutableDatabaseContext =>
+    val result = performOperationViaExecutionActor(100.millis, 200.millis, 400.millis) { _ : ExecutableDatabaseContext =>
       if (delays.length < 3) {
         delays += (System.nanoTime() - start).nanos.toMillis.toInt
         Future.failed(new NoSuchElementException)
       }
       else Future.successful(token)
-    }, policy, captor))
-    execution ! Start(null)
+    }
 
-    whenReady(captor ? SingleMessageCaptor.Read, Timeout(900.millis)) { sendToken =>
+    whenReady(result, Timeout(900.millis)) { sendToken =>
       sendToken shouldEqual token
       delays.size shouldEqual 3
-      delays.head shouldEqual (0 +- fuzzFactor)
-      delays(1) shouldEqual (100 +- 2 * fuzzFactor)
-      delays(2) shouldEqual (300 +- 3 * fuzzFactor)
+      delays.head shouldEqual (fuzzFactor +- fuzzFactor)
+      delays(1) shouldEqual (100 + fuzzFactor +- fuzzFactor)
+      delays(2) shouldEqual (300 + fuzzFactor +- fuzzFactor)
     }
   }
 
   it should "generate a consolidated error when retries are exceeded" in {
     var attempts = 0
-    val policy = new FixedRetrySchedule(10.millis, 10.millis, 10.millis)
-    val captor = system.actorOf(Props[SingleMessageCaptor])
-
-    val execution = system.actorOf(DBExecution.props({ _ : ExecutableDatabaseContext =>
+    val result = performOperationViaExecutionActor(10.millis, 10.millis, 10.millis) { _ : ExecutableDatabaseContext =>
       attempts += 1
       Future.failed(new NoSuchElementException(attempts.toString))
-    }, policy, captor))
-    execution ! Start(null)
-    whenReady((captor ? SingleMessageCaptor.Read).failed) { error =>
+    }
+
+    whenReady(result.failed) { error =>
       error.getMessage shouldEqual "4"
       error.getSuppressed.map(_.getMessage) should contain theSameElementsInOrderAs List("1", "2", "3")
     }
@@ -94,47 +84,51 @@ class DBExecutionSpec extends FlatSpec with TestActorSystem with ScalaFutures wi
 
   it should "fail immediately when no retries are allowed" in {
     val token = UUID.randomUUID()
-    val captor = system.actorOf(Props[SingleMessageCaptor])
-    val execution = system.actorOf(DBExecution.props({ _ : ExecutableDatabaseContext =>
+    val result = performOperationViaExecutionActor(){ _ : ExecutableDatabaseContext =>
       Future.failed(new IllegalArgumentException(token.toString))
-    }, NoRetrySchedule, captor))
+    }
 
-    execution ! Start(null)
-
-    whenReady((captor ? SingleMessageCaptor.Read).failed) { error =>
+    whenReady(result.failed) { error =>
       error.getMessage shouldEqual token.toString
     }
   }
 
   it should "not attempt further retries after being signalled with a NoRetry exception" in {
     val token = UUID.randomUUID()
-    val captor = system.actorOf(Props[SingleMessageCaptor])
-    val execution = system.actorOf(DBExecution.props({ _ : ExecutableDatabaseContext =>
+    val result = performOperationViaExecutionActor(1.day){ _ : ExecutableDatabaseContext =>
       Future.failed(new IllegalArgumentException(token.toString) with NoRetry)
-    }, new FixedRetrySchedule(1.day), captor))
+    }
 
-    execution ! Start(null)
-
-    whenReady((captor ? SingleMessageCaptor.Read).failed) { error =>
+    whenReady(result.failed) { error =>
       error.getMessage shouldEqual token.toString
     }
   }
-
 
   it should "still report suppressed exception on a no-retry failure" in {
     var count = 0
     val token = UUID.randomUUID()
-    val captor = system.actorOf(Props[SingleMessageCaptor])
-    val execution = system.actorOf(DBExecution.props({ _ : ExecutableDatabaseContext =>
+    val result = performOperationViaExecutionActor(10.millis, 1.day){ _ : ExecutableDatabaseContext =>
       count += 1
       Future.failed(if (count == 1) new NoSuchElementException else new IllegalArgumentException(token.toString) with NoRetry)
-    }, new FixedRetrySchedule(10.millis, 1.day), captor))
+    }
 
-    execution ! Start(null)
-
-    whenReady((captor ? SingleMessageCaptor.Read).failed) { error =>
+    whenReady(result.failed) { error =>
       error.getMessage shouldEqual token.toString
       error.getSuppressed.size shouldEqual 1
     }
   }
+}
+
+object DBExecutionSpec {
+  val fuzzFactor = 50
+
+  def performOperationViaExecutionActor[Result](schedule: FiniteDuration*)(op: DBOperation[ExecutableDatabaseContext, Result])(implicit system: ActorRefFactory, timeout: akka.util.Timeout) = {
+    val captor = system.actorOf(Props[SingleMessageCaptor])
+    val execution = system.actorOf(DBExecution.props(op, new FixedRetrySchedule(schedule :_*), captor))
+
+    execution ! Start(null)
+
+    captor ? SingleMessageCaptor.Read
+  }
+
 }
