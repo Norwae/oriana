@@ -9,6 +9,6 @@ abstract class DatabaseContext(val driver: JdbcProfile, config: Config, path: St
 
   protected def connectToDatabase(): driver.backend.Database = driver.backend.createDatabase(config, path)
 
-  def allTables: List[driver.api.Table[_]]
+  def allTables: List[Entity[_, _]]
 
 }

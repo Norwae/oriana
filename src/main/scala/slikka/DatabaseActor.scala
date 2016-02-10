@@ -17,12 +17,18 @@ class DatabaseActor(dbAccess: DatabaseContext) extends Actor {
 
   val bufferOperation: Receive = {
     case op: DBOperation[_,_] =>
-      val prepped = prepareOperation(op, sender())
+      val prepped = prepareOperation(op, NoRetrySchedule, sender())
       waiting += prepped
+    case tr: DBTransaction[_, _, _, _] =>
+      import dbAccess.api._
+      val transactionalOperation = (tr.apply _).andThen(_.transactionally).andThen(dbAccess.database.run)
+      val retrySchedule = tr.overrideRetrySchedule getOrElse schedule
+
+      prepareOperation(transactionalOperation, schedule, sender())
   }
 
   val ready: Receive = changeSchedule orElse {
-    case op: DBOperation[_, _] => prepareOperation(op, sender()) ! Start(dbAccess)
+    case op: DBOperation[_, _] => prepareOperation(op, NoRetrySchedule, sender()) ! Start(dbAccess)
   }
 
   val initializing: Receive = changeSchedule orElse bufferOperation orElse {
@@ -42,9 +48,10 @@ class DatabaseActor(dbAccess: DatabaseContext) extends Actor {
 
   def receive = beforeInit
 
-  protected def prepareOperation(dbOperation: DBOperation[_,_], target: ActorRef) = context.actorOf(DBExecution.props(dbOperation, dbOperation.retrySchedule getOrElse schedule, target))
+  protected def prepareOperation(dbOperation: DBOperation[_,_], schedule: RetrySchedule, target: ActorRef) =
+    context.actorOf(DBExecution.props(dbOperation, schedule, target))
 
-  protected def initialize() = prepareOperation(init, self) ! Start(dbAccess)
+  protected def initialize() = prepareOperation(init, NoRetrySchedule, self) ! Start(dbAccess)
 }
 
 object DatabaseActor {
