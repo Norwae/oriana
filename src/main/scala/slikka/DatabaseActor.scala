@@ -1,45 +1,50 @@
 package slikka
 
 import akka.actor.{Actor, ActorRef}
-import akka.pattern.ask
-import akka.util.Timeout
 
-import scala.concurrent.duration._
 import scala.collection.mutable
-import scala.util.Success
 
 class DatabaseActor(dbAccess: DatabaseContext) extends Actor {
   import DatabaseActor._
 
   var schedule: RetrySchedule = DefaultSchedule
-  var initStarted = false
   var init: DBInitializer = SchemaCreateInitializer
   val waiting = mutable.Buffer[ActorRef]()
 
-  val ready: Receive = {
-    case op: DBOperation[_, _] => prepareOperation(op, sender()) ! Start(dbAccess)
+  val changeSchedule: Receive = {
     case schedule: RetrySchedule => this.schedule = schedule
   }
 
-  val initializing: Receive = {
-    case Init if !initStarted=>
-      initialize()
-      initStarted = true
-    case schedule: RetrySchedule => this.schedule = schedule
-    case init: DBInitializer => this.init = init
+  val bufferOperation: Receive = {
     case op: DBOperation[_,_] =>
       val prepped = prepareOperation(op, sender())
       waiting += prepped
+  }
+
+  val ready: Receive = changeSchedule orElse {
+    case op: DBOperation[_, _] => prepareOperation(op, sender()) ! Start(dbAccess)
+  }
+
+  val initializing: Receive = changeSchedule orElse bufferOperation orElse {
     case InitComplete =>
       waiting.foreach(_ ! Start(dbAccess))
       waiting.clear()
-      context.become(ready)
+      context become ready
   }
 
-  protected def prepareOperation(dbOperation: DBOperation[_,_], target: ActorRef) = context.actorOf(DBExecution.props(dbOperation, schedule, target))
-  protected def initialize() = prepareOperation(init, self) ! Start(dbAccess)
+  val beforeInit: Receive = changeSchedule orElse bufferOperation orElse {
+    case init: DBInitializer => this.init = init
+    case Init =>
+      initialize()
+      context become initializing
+  }
 
-  def receive = initializing
+
+  def receive = beforeInit
+
+  protected def prepareOperation(dbOperation: DBOperation[_,_], target: ActorRef) = context.actorOf(DBExecution.props(dbOperation, dbOperation.retrySchedule getOrElse schedule, target))
+
+  protected def initialize() = prepareOperation(init, self) ! Start(dbAccess)
 }
 
 object DatabaseActor {
