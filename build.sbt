@@ -13,7 +13,10 @@ libraryDependencies ++= {
 
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
+
     "com.typesafe.slick" %% "slick" % slickVersion,
-    "com.typesafe.slick" %% "slick-hikaricp" % slickVersion
+    "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
+
+    "org.scalatest" %% "scalatest" % "2.2.6" % "test"
   )
 }

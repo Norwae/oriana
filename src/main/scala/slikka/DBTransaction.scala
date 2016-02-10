@@ -8,7 +8,8 @@ trait DBTransaction[Context <: DatabaseContext, +R, +S <: NoStream, -E <: Effect
 }
 
 object DBTransaction {
-  implicit class FunctionalTransaction[Context <: DatabaseContext, +R, +S <: NoStream, -E <: Effect](f: Context => DBIOAction[R,S,E]) {
+  implicit class FunctionalTransaction[Context <: DatabaseContext, +R, +S <: NoStream, -E <: Effect](f: Context => DBIOAction[R,S,E]) extends DBTransaction[Context, R, S, E]{
     def apply(context: Context) = f(context)
   }
+
 }
