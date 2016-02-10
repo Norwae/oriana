@@ -1,13 +1,11 @@
 package slikka
 
-import akka.actor.{Props, ActorRef, Actor}
-
+import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.Status.{Failure => FailureStatus}
 
 import scala.collection.mutable
-import scala.util.{Success, Failure}
-import scala.util.control.NonFatal
-
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success}
 
 class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule, target: ActorRef) extends Actor {
   var retryCount = 0
@@ -16,8 +14,10 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
   override def receive = {
     case Start(ctx) =>
       operation(ctx.asInstanceOf[DBContext]) onComplete {
-        case Failure(e: NoRetry) => reportCalculationResult(e)
-        case fail@Failure(NonFatal(e)) =>
+        case Failure(e: NoRetry) =>
+          exceptions.foreach(e.addSuppressed)
+          reportCalculationResult(FailureStatus(e))
+        case Failure(e) =>
           retrySchedule.retryDelay(retryCount) match {
             case Some(delay) =>
               exceptions += e
@@ -25,7 +25,7 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
               context.system.scheduler.scheduleOnce(delay, self, Start(ctx))
             case None =>
               exceptions.foreach(e.addSuppressed)
-              reportCalculationResult(fail)
+              reportCalculationResult(FailureStatus(e))
           }
         case Success(value) => reportCalculationResult(value)
       }

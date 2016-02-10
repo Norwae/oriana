@@ -25,7 +25,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
       val transactionalOperation = (tr.apply _).andThen(_.transactionally).andThen(dbAccess.database.run)
       val retrySchedule = tr.overrideRetrySchedule getOrElse schedule
 
-      prepareOperation(transactionalOperation, schedule, sender())
+      prepareOperation(transactionalOperation, retrySchedule, sender())
   }
 
   val ready: Receive = changeSchedule orElse {
