@@ -16,7 +16,8 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
   override def receive = {
     case Start(ctx) =>
       operation(ctx.asInstanceOf[DBContext]) onComplete {
-        case fail@Failure(Retryable(NonFatal(e))) =>
+        case Failure(e: NoRetry) => reportCalculationResult(e)
+        case fail@Failure(NonFatal(e)) =>
           retrySchedule.retryDelay(retryCount) match {
             case Some(delay) =>
               exceptions += e
@@ -26,7 +27,6 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
               exceptions.foreach(e.addSuppressed)
               reportCalculationResult(fail)
           }
-        case x: Failure[T] => reportCalculationResult(x)
         case Success(value) => reportCalculationResult(value)
       }
   }
