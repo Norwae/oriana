@@ -19,6 +19,19 @@ trait RetrySchedule {
 }
 
 /**
+  * Simple schedule that never attempts a retry
+  */
+object NoRetrySchedule extends RetrySchedule {
+  /**
+    * Always returns None
+    *
+    * @param retryCount ignored
+    * @return None
+    */
+  override def retryDelay(retryCount: Int) = None
+}
+
+/**
   * Attempts a fixed number of retries, with constant time delays
   * @param retries retry time delays
   */
