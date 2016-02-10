@@ -45,7 +45,7 @@ class DBExecutionSpec extends FlatSpec with TestActorSystem with ScalaFutures wi
 
     execution ! Start(null)
 
-    whenReady(captor ? SingleMessageCaptor.Read) { sendToken =>
+    whenReady(captor ? SingleMessageCaptor.Read, Timeout(250.millis)) { sendToken =>
       sendToken shouldEqual token
     }
   }

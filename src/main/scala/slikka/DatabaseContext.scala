@@ -5,9 +5,9 @@ import slick.driver.JdbcProfile
 
 trait DatabaseContext {
   val driver: JdbcProfile
-  val api: driver.api.type
+  val api: driver.API
 
-  def allTables: List[Entity[_, _]]
+  def allTables: List[TableAccess[_]]
 }
 
 trait DatabaseCommandExecution { self: DatabaseContext =>

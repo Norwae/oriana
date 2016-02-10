@@ -17,6 +17,7 @@ libraryDependencies ++= {
     "com.typesafe.slick" %% "slick" % slickVersion,
     "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
 
+    "com.h2database" % "h2" % "1.4.191" % "test",
     "org.scalatest" %% "scalatest" % "2.2.6" % "test"
   )
 }
