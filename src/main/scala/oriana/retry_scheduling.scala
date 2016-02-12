@@ -1,4 +1,4 @@
-package slikka
+package oriana
 
 import com.typesafe.config.Config
 

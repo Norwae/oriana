@@ -5,7 +5,7 @@ import slick.dbio.{Effect, NoStream}
 
 import scala.concurrent.{ExecutionContext, Future}
 
-package object slikka {
+package object oriana {
   type ExecutableDatabaseContext = DatabaseContext with DatabaseCommandExecution
   type DBOperation[-Context <: ExecutableDatabaseContext, +Result] = (Context) => Future[Result]
 

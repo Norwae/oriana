@@ -1,4 +1,4 @@
-package slikka
+package oriana
 
 import akka.actor.{Actor, ActorRef, Props}
 import akka.actor.Status.{Failure => FailureStatus}

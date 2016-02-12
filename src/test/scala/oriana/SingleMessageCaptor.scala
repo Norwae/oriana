@@ -1,11 +1,11 @@
-package slikka
+package oriana
 
 import akka.actor.{ActorRef, Actor}
 
 import scala.collection.mutable
 
 class SingleMessageCaptor extends Actor {
-  import slikka.SingleMessageCaptor.Read
+  import oriana.SingleMessageCaptor.Read
   var contents: Any = _
   var waiting = mutable.Buffer[ActorRef]()
 

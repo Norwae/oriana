@@ -1,3 +1,0 @@
-package slikka
-
-trait NoRetry

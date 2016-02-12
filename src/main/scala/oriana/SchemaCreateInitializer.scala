@@ -1,4 +1,4 @@
-package slikka
+package oriana
 
 import scala.util.{Failure, Success}
 

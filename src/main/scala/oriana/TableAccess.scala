@@ -1,4 +1,4 @@
-package slikka
+package oriana
 
 import slick.dbio.Effect.Schema
 import slick.dbio.{DBIOAction, NoStream}

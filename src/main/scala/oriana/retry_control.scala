@@ -1,0 +1,3 @@
+package oriana
+
+trait NoRetry

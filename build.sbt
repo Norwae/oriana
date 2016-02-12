@@ -1,4 +1,4 @@
-name := "slikka"
+name := "oriana"
 
 version := "1.0"
 

@@ -1,4 +1,4 @@
-package slikka
+package oriana
 
 import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
 import org.scalatest.{ShouldMatchers, FlatSpec}

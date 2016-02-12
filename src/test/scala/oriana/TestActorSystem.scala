@@ -1,4 +1,4 @@
-package slikka
+package oriana
 
 import akka.actor.ActorSystem
 import akka.util.Timeout
