@@ -17,6 +17,6 @@ object SchemaCreateInitializer extends DBInitializer {
       }
     }
 
-    ctx.database.run(DBIO.seq(tableCreations :_*))
+    ctx.database.run(DBIO.seq(tableCreations :_*)).map(_ => DatabaseActor.InitComplete)
   }
 }

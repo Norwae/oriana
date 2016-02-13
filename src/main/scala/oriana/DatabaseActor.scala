@@ -1,11 +1,11 @@
 package oriana
 
+import akka.actor.Status.Failure
 import akka.actor.{Props, Actor, ActorRef}
 import org.slf4j.LoggerFactory
 import slick.dbio.{Effect, NoStream}
 
 import scala.collection.mutable
-import scala.util.Failure
 
 class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
   import DatabaseActor._
