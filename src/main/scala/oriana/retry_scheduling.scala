@@ -7,7 +7,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 
 /**
-  * Defines a retry schedule for failures of an `DBOperation`.
+  * Defines a retry schedule for failures of an [DBTransaction].
   */
 trait RetrySchedule {
   /**
