@@ -12,6 +12,7 @@ import org.scalatest.{FlatSpec, ShouldMatchers}
 import oriana.DatabaseActor.Init
 import oriana.testdatabase.{SingleTestTableAccess, TestDatabaseContext}
 
+import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -82,9 +83,9 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
       whenReady(askForTime()) { second =>
         whenReady(askForTime()) { third =>
           whenReady(askForTime(nowFromTx)) { fourth =>
-            (second - first).nanos.toMillis shouldEqual (7L +- 7L)
-            (third - second).nanos.toMillis shouldEqual (7L +- 7L)
-            (fourth - third).nanos.toMillis shouldEqual (7L +- 7L)
+            (second - first).nanos.toMillis shouldEqual (10L +- 10L)
+            (third - second).nanos.toMillis shouldEqual (10L +- 10L)
+            (fourth - third).nanos.toMillis shouldEqual (10L +- 10L)
           }
         }
       }
@@ -154,13 +155,143 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     }
   }
 
-  "the database actors retry handling" should "execute operations once - even if they fail" in pending
-  it should "retry transactions according to the default policy" in pending
-  it should "allow overriding the retry schedule" in pending
-  it should "allow setting up a new default schedule by sending it to the actor" in pending
+  "the database actors retry handling" should "execute operations once - even if they fail" in {
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    actor ! Init
+    var calls = 0
+    val failingOperation = actor ? { ctx: DatabaseContext =>
+      calls += 1
+      Future.failed(new IOException())
+    }
 
-  "the pimped syntax" should "allow access for operations" in pending
-  it should "allow access for transactions" in pending
+    whenReady(failingOperation.failed, Timeout(5.second)) { _ =>
+      calls shouldEqual 1
+    }
+  }
+
+  it should "retry transactions according to the default policy" in {
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    actor ! Init
+    val attemptTimes = mutable.Buffer[Long]()
+
+    val badTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+      override def apply(context: TestDatabaseContext) = {
+        attemptTimes += System.nanoTime()
+        DBIO.failed(new IOException())
+      }
+    }
+
+    whenReady((actor ? badTx).failed, Timeout(5.second)) { _ =>
+      val first = attemptTimes.head
+      def delay(i: Int) = (attemptTimes(i) - first).nanos.toMillis.toInt
+
+      attemptTimes.size shouldEqual 6
+
+      delay(1) shouldEqual 100 +- 100
+      delay(2) shouldEqual 300 +- 100
+      delay(3) shouldEqual 600 +- 100
+      delay(4) shouldEqual 1000 +- 100
+      delay(5) shouldEqual 1500 +- 100
+    }
+  }
+
+  it should "allow overriding the retry schedule" in {
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    actor ! Init
+    val attemptTimes = mutable.Buffer[Long]()
+
+    val badTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+      override def apply(context: TestDatabaseContext) = {
+        attemptTimes += System.nanoTime()
+        DBIO.failed(new IOException())
+      }
+
+      override def overrideRetrySchedule = Some(new FixedRetrySchedule(50.millis, 150.millis, 200.millis))
+    }
+
+    whenReady((actor ? badTx).failed, Timeout(5.second)) { _ =>
+      val first = attemptTimes.head
+      def delay(i: Int) = (attemptTimes(i) - first).nanos.toMillis.toInt
+
+      attemptTimes.size shouldEqual 4
+
+      delay(1) shouldEqual 50 +- 100
+      delay(2) shouldEqual 200 +- 100
+      delay(3) shouldEqual 400 +- 100
+    }
+  }
+
+  it should "allow setting up a new default schedule by sending it to the actor" in {
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    actor ! Init
+    actor ! new FixedRetrySchedule(175.millis)
+    val attemptTimes = mutable.Buffer[Long]()
+
+    val badTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+      override def apply(context: TestDatabaseContext) = {
+        attemptTimes += System.nanoTime()
+        DBIO.failed(new IOException())
+      }
+    }
+
+    whenReady((actor ? badTx).failed, Timeout(5.second)) { _ =>
+      val first = attemptTimes.head
+      def delay(i: Int) = (attemptTimes(i) - first).nanos.toMillis.toInt
+
+      attemptTimes.size shouldEqual 2
+
+      delay(1) shouldEqual 175 +- 100
+    }
+  }
+
+  "the pimped syntax" should "allow access for operations" in {
+    val token = UUID.randomUUID.toString
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    implicit val name = DatabaseName(actor.path.name)
+    actor ! Init
+
+    val retrievedToken = executeDBTransaction { _: TestDatabaseContext =>
+      DBIO.successful(token)
+    }
+
+    whenReady(retrievedToken) { returned =>
+      returned shouldEqual token
+    }
+  }
+  it should "allow access for transactions" in {
+    val token = UUID.randomUUID.toString
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    implicit val name = DatabaseName(actor.path.name)
+    actor ! Init
+
+    val retrievedToken = executeDBOperation { _: TestDatabaseContext with DatabaseCommandExecution =>
+      Future.successful(token)
+    }
+
+    whenReady(retrievedToken) { returned =>
+      returned shouldEqual token
+    }
+  }
+
+  it should "use a default db called 'database' when none is specified" in {
+    val token = UUID.randomUUID.toString
+    val actor = system.actorOf(DatabaseActor.props(new DBContext), "database")
+    actor ! Init
+
+    val retrievedTokenTransactional = executeDBTransaction { _: TestDatabaseContext =>
+      DBIO.successful(token)
+    }
+
+    val retrievedToken = executeDBOperation { _: TestDatabaseContext with DatabaseCommandExecution =>
+      Future.successful(token)
+    }
+
+    whenReady(Future.sequence(Seq(retrievedToken, retrievedTokenTransactional))) { result =>
+      result.toSet should contain theSameElementsAs Set(token)
+    }
+
+
+  }
 }
 
 
