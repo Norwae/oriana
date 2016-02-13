@@ -22,7 +22,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
   implicit override val timeout = akka.util.Timeout(15.seconds)
   "the database actor (initialization)" should "delay operations until after initialization" in {
     val actor = system.actorOf(DatabaseActor.props(new TestDatabaseContext))
-    val executionTime = actor ? { ctx: TestDatabaseContext =>
+    val executionTime = actor ? { ctx: DatabaseContext =>
       Future.successful(System.nanoTime())
     }
 
@@ -60,7 +60,25 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
         status shouldEqual Blown
       }
     }
+  }
 
+  it should "immediately execute operations after init" in {
+    val actor = system.actorOf(DatabaseActor.props(new TestDatabaseContext))
+    val now = { _: DatabaseContext =>
+      Future.successful(System.nanoTime())
+    }
+    def askForTime() = (actor ? now).mapTo[Long]
+
+    actor ! Init
+
+    whenReady(askForTime()) { first =>
+      whenReady(askForTime()) { second =>
+        whenReady(askForTime()) { third =>
+          (second - first).nanos.toMillis shouldEqual (7L +- 7L)
+          (third - second).nanos.toMillis shouldEqual (7L +- 7L)
+        }
+      }
+    }
   }
 
   "the database actors execution mechanism" should "execute operations with a executable context" in pending
