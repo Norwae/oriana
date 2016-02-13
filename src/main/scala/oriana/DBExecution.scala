@@ -7,9 +7,18 @@ import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
 
+/**
+  * Internal implementation actor for a single database interaction. This actor handles the actual invocation of
+  * an operation, including failure / retry logic.
+  * @param operation operation to perform
+  * @param retrySchedule retry schedule for failed operations
+  * @param target actor to send result or error report to
+  * @tparam DBContext context type
+  * @tparam T result type
+  */
 class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule, target: ActorRef) extends Actor {
-  var retryCount = 0
-  val exceptions = mutable.Buffer[Throwable]()
+  private var retryCount = 0
+  private val exceptions = mutable.Buffer[Throwable]()
 
   override def receive = {
     case Start(ctx) =>
@@ -37,6 +46,18 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
   }
 }
 
+/**
+  * Companion object to [DBExecution]
+  */
 object DBExecution {
+  /**
+    * Generates a new DBExecution properties object
+    * @param op operation for the props
+    * @param schedule retry schedule
+    * @param target target actor ref
+    * @tparam DBContext context type
+    * @tparam T result type
+    * @return props for the given set of parameters
+    */
   def props[DBContext <: ExecutableDatabaseContext, T](op: DBOperation[DBContext, T], schedule: RetrySchedule, target: ActorRef) = Props(new DBExecution[DBContext, T](op, schedule, target))
 }
