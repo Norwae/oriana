@@ -13,7 +13,7 @@ class SchemaCreateInitializerSpec extends FlatSpec with ShouldMatchers with Scal
   import testdatabase._
 
   "the schema creating initializer" should "create a  usable schema" in {
-    val context = new TestDatabaseContext
+    val context = new TestDatabaseContext with DatabaseCommandExecution
 
     whenReady(SchemaCreateInitializer(context), Timeout(5.seconds)) { _ =>
       val actions = insertAndQueryExampleDataFromTable
@@ -23,7 +23,7 @@ class SchemaCreateInitializerSpec extends FlatSpec with ShouldMatchers with Scal
     }
   }
   it should "be idempotent" in {
-    val context = new TestDatabaseContext
+    val context = new TestDatabaseContext with DatabaseCommandExecution
     val createTwice = for {
       _ <- SchemaCreateInitializer(context)
       _ <- SchemaCreateInitializer(context)

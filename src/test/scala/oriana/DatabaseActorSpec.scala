@@ -19,9 +19,12 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSystem with ScalaFutures with Eventually {
   import slick.driver.H2Driver.api._
   import DatabaseActorSpec._
+
+  class DBContext extends TestDatabaseContext with DatabaseCommandExecution
+
   implicit override val timeout = akka.util.Timeout(15.seconds)
   "the database actor (initialization)" should "delay operations until after initialization" in {
-    val actor = system.actorOf(DatabaseActor.props(new TestDatabaseContext))
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
     val executionTime = actor ? { ctx: DatabaseContext =>
       Future.successful(System.nanoTime())
     }
@@ -37,7 +40,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
 
   it should "allow setting another initializer by sending it to the actor" in {
     val token = UUID.randomUUID.toString
-    val actor = system.actorOf(DatabaseActor.props(new TestDatabaseContext))
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
     actor ! new TokenInitializer(token)
     actor ! DatabaseActor.Init
 
@@ -50,7 +53,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     }
   }
   it should "fail, invoking its supervisor if initialization fails" in {
-    val actorSpec = DatabaseActor.props(new TestDatabaseContext)
+    val actorSpec = DatabaseActor.props(new DBContext)
     val observer = system.actorOf(Fuse.props(actorSpec))
     observer ! new FailingInitializer
     observer ! Init
@@ -63,27 +66,93 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
   }
 
   it should "immediately execute operations after init" in {
-    val actor = system.actorOf(DatabaseActor.props(new TestDatabaseContext))
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
     val now = { _: DatabaseContext =>
       Future.successful(System.nanoTime())
     }
-    def askForTime() = (actor ? now).mapTo[Long]
+    def askForTime(`with`: Any = now) = (actor ? `with`).mapTo[Long]
+
+    val nowFromTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+      override def apply(context: TestDatabaseContext) = DBIO.successful(System.nanoTime())
+    }
 
     actor ! Init
 
-    whenReady(askForTime()) { first =>
+    whenReady(askForTime(), Timeout(15.seconds)) { first =>
       whenReady(askForTime()) { second =>
         whenReady(askForTime()) { third =>
-          (second - first).nanos.toMillis shouldEqual (7L +- 7L)
-          (third - second).nanos.toMillis shouldEqual (7L +- 7L)
+          whenReady(askForTime(nowFromTx)) { fourth =>
+            (second - first).nanos.toMillis shouldEqual (7L +- 7L)
+            (third - second).nanos.toMillis shouldEqual (7L +- 7L)
+            (fourth - third).nanos.toMillis shouldEqual (7L +- 7L)
+          }
         }
       }
     }
   }
 
-  "the database actors execution mechanism" should "execute operations with a executable context" in pending
-  it should "transactionally attempt a DatabaseTransaction" in pending
-  it should "commit its transaction on success" in pending
+  "the database actors execution mechanism" should "execute operations with a executable context" in {
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    actor ! Init
+    val insertResult = actor ? { context: ExecutableDatabaseContext =>
+
+      context.database.run(SingleTestTableAccess.query += (38, "Solidus"))
+    }
+
+    whenReady(insertResult.mapTo[Int]) { insertedRows =>
+      insertedRows shouldEqual 1
+    }
+  }
+
+  it should "make transactional attempts a DatabaseTransaction" in {
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    actor ! Init
+
+    val abortiveInsert = actor ? new DBTransaction[TestDatabaseContext, Int, NoStream, Effect.Write] {
+      def apply(ctx: TestDatabaseContext) = {
+        for {
+          _ <- SingleTestTableAccess.query += (192, "Salamander")
+          if false
+          _ <- SingleTestTableAccess.query += (111, "Sashimi")
+        } yield 2
+      }
+    }
+
+    whenReady(abortiveInsert.failed, Timeout(10.seconds)) { err =>
+      val countCreatedRows = actor ? { context: ExecutableDatabaseContext =>
+        context.database.run(SingleTestTableAccess.query.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
+      }
+
+      whenReady(countCreatedRows) { created =>
+        created shouldEqual 0
+      }
+    }
+  }
+
+  it should "commit its transaction on success" in {
+    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    actor ! Init
+
+    val transactionalInsert = actor ? new DBTransaction[TestDatabaseContext, Int, NoStream, Effect.Write] {
+      def apply(ctx: TestDatabaseContext) = {
+        for {
+          _ <- SingleTestTableAccess.query += (192, "Salamander")
+          _ <- SingleTestTableAccess.query += (111, "Sashimi")
+        } yield 2
+      }
+    }
+
+    whenReady(transactionalInsert, Timeout(10.seconds)) { result =>
+      result shouldEqual 2
+      val countCreatedRows = actor ? { context: ExecutableDatabaseContext =>
+        context.database.run(SingleTestTableAccess.query.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
+      }
+
+      whenReady(countCreatedRows) { created =>
+        created shouldEqual 2
+      }
+    }
+  }
 
   "the database actors retry handling" should "execute operations once - even if they fail" in pending
   it should "retry transactions according to the default policy" in pending

@@ -26,8 +26,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
       waiting += prepareOperation(op, NoRetrySchedule, sender())
       log.debug("queued a non-transactional operation")
     case tr: DBTransaction[_, Any, NoStream, Effect] =>
-      val operation: ActorRef = prepareTransaction(tr)
-      waiting += operation
+      waiting += prepareTransaction(tr)
       log.debug("queued a transactional operation")
   }
 
