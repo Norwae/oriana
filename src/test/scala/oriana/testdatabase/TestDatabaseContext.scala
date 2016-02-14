@@ -1,11 +1,11 @@
 package oriana.testdatabase
 
-import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
-import oriana.{SimpleDatabaseContext, DatabaseContext}
-import slick.driver.H2Driver
+import com.typesafe.config.ConfigFactory
+import oriana.{DatabaseContext, SimpleDatabaseContext}
 
+import scala.collection.JavaConversions._
 
-class TestDatabaseContext extends SimpleDatabaseContext(H2Driver, ConfigFactory.empty().withValue("url", ConfigValueFactory.fromAnyRef(createJdbcUrl()))) with DatabaseContext {
+class TestDatabaseContext extends SimpleDatabaseContext(ConfigFactory.parseMap(Map("url" -> createJdbcUrl(), "type" -> "H2"))) with DatabaseContext {
   val allTables = List(SingleTestTableAccess)
 }
 

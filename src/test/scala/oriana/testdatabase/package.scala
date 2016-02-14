@@ -1,6 +1,7 @@
 package oriana
 
 import java.nio.file.Files
+import java.util.UUID
 
 import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
 import slick.dbio.Effect.{Read, Write}
@@ -13,8 +14,8 @@ package object testdatabase {
   import H2Driver.api._
 
   def createJdbcUrl() = {
-    val tempDirectory = Files.createTempDirectory("test-db").toAbsolutePath.toString
-    s"jdbc:h2:$tempDirectory/test"
+    val id = UUID.randomUUID.toString
+    s"jdbc:h2:mem:$id;DB_CLOSE_DELAY=-1"
   }
 
   val insertAndQueryExampleDataFromTable: DBIOAction[Seq[Int], NoStream, Write with Read] = {
