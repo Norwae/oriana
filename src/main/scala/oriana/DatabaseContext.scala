@@ -68,7 +68,7 @@ class SimpleDatabaseContext(val driver: JdbcProfile, config: Config) {
     * @return new instance
     */
   def this(config: Config) = this({
-    config.getString("driver") match {
+    config.getString("type") match {
       case "H2" => H2Driver
       case "MySQL" => MySQLDriver
       case "Postgres" => PostgresDriver
