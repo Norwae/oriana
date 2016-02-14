@@ -93,7 +93,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
 
 object DatabaseActor {
   case object Init
-  private [oriana] case object InitComplete
+  case object InitComplete
 
   def props(ctx: ExecutableDatabaseContext) = Props(new DatabaseActor(ctx))
 }
