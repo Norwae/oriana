@@ -39,7 +39,7 @@ package object oriana {
     * @return future with operation result
     */
   def executeDBOperation[T: Manifest](op: DBOperation[_ <: ExecutableDatabaseContext, T])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
-    (actorRefFactory.actorSelection(s"/user/${actorName.name}") ? op).mapTo[T]
+    (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
   }
 
   /**
@@ -63,7 +63,7 @@ package object oriana {
     * @tparam T result type of the transaction
     * @return future with transaction result
     */
-  def executeDBTransaction[Context <: DatabaseContext, T: Manifest](op: DBTransaction[Context, T, NoStream, Effect])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
-    (actorRefFactory.actorSelection(s"/user/${actorName.name}") ? op).mapTo[T]
+  def executeDBTransaction[Context <: DatabaseContext, T: Manifest, S <: NoStream, E <: Effect](op: DBTransaction[Context, T, S, E])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
+    (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
   }
 }

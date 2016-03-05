@@ -9,6 +9,7 @@ import org.scalatest.concurrent.PatienceConfiguration.Timeout
 
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.{FlatSpec, ShouldMatchers}
+import oriana.DBTransaction.FunctionalTransaction
 import oriana.DatabaseActor.Init
 import oriana.testdatabase.{SingleTestTableAccess, TestDatabaseContext}
 
@@ -247,7 +248,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
   "the pimped syntax" should "allow access for operations" in {
     val token = UUID.randomUUID.toString
     val actor = system.actorOf(DatabaseActor.props(new DBContext))
-    implicit val name = DatabaseName(actor.path.name)
+    implicit val name = DatabaseName(actor.path)
     actor ! Init
 
     val retrievedToken = executeDBTransaction { _: TestDatabaseContext =>
@@ -261,7 +262,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
   it should "allow access for transactions" in {
     val token = UUID.randomUUID.toString
     val actor = system.actorOf(DatabaseActor.props(new DBContext))
-    implicit val name = DatabaseName(actor.path.name)
+    implicit val name = DatabaseName(actor.path)
     actor ! Init
 
     val retrievedToken = executeDBOperation { _: TestDatabaseContext with DatabaseCommandExecution =>
@@ -278,16 +279,22 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     val actor = system.actorOf(DatabaseActor.props(new DBContext), "database")
     actor ! Init
 
-    val retrievedTokenTransactional = executeDBTransaction { _: TestDatabaseContext =>
-      DBIO.successful(token)
+    val retrievedTokenTransactional = executeDBTransaction { ctx: TestDatabaseContext =>
+      val action1 = SingleTestTableAccess.query += (1, token)
+      val action2 = SingleTestTableAccess.query.filter(_.id === 1).result.head
+
+      action1.flatMap(_ => action2)
     }
 
-    val retrievedToken = executeDBOperation { _: TestDatabaseContext with DatabaseCommandExecution =>
-      Future.successful(token)
+    val retrievedToken = executeDBOperation { ctx: TestDatabaseContext with DatabaseCommandExecution =>
+      val action1 = SingleTestTableAccess.query += (12, token)
+      val action2 = SingleTestTableAccess.query.filter(_.id === 12).result.head
+
+      ctx.database.run(action1.flatMap(_ => action2))
     }
 
     whenReady(Future.sequence(Seq(retrievedToken, retrievedTokenTransactional))) { result =>
-      result.toSet should contain theSameElementsAs Set(token)
+      result should contain theSameElementsAs Set((1, token), (12, token))
     }
 
 
