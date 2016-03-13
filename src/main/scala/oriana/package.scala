@@ -1,7 +1,8 @@
 import akka.actor.ActorRefFactory
 import akka.pattern.ask
+import akka.stream.scaladsl.Source
 import akka.util.Timeout
-import slick.dbio.{Effect, NoStream}
+import slick.dbio.{Streaming, DBIOAction, Effect, NoStream}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -20,6 +21,8 @@ package object oriana {
     */
   type DBOperation[-Context <: ExecutableDatabaseContext, +Result] = (Context) => Future[Result]
 
+  type DBStreamOperation[-Context <: DatabaseContext, +Result, -E <: Effect] = (Context) => DBIOAction[Result, Streaming[Result], E]
+
   /**
     * Syntactic sugar for access to the database. The block argument is scheduled as a [DBOperation] to the implicit
     * database.
@@ -30,6 +33,7 @@ package object oriana {
     *   ctx.database.run(DBIO.successful(42))
     * }
     * }}}
+    *
     * @param op operation to perform
     * @param actorRefFactory most likely an actor system
     * @param timeout timeout for ask operation(s) used under the hood to implement the Future
@@ -42,6 +46,13 @@ package object oriana {
     (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
   }
 
+  def executeAsSource[Context <: DatabaseContext, T, E <: Effect](op: DBStreamOperation[Context, T, E])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName) = {
+    Source.fromFuture(executeDBOperation { ctx: Context with ExecutableDatabaseContext =>
+      val actions = op(ctx)
+
+      Future.successful(ctx.database.stream(actions))
+    }) flatMapConcat (Source.fromPublisher(_))
+  }
   /**
     * Syntactic sugar for access to the database. The block argument is scheduled as a [DBTransaction] to the implicit
     * database. Transactions may be attempted multiple times in case of failures, making them good candidates
@@ -54,6 +65,7 @@ package object oriana {
     *   DBIO.successful(42)
     * }
     * }}}
+    *
     * @param op transaction to attempt
     * @param actorRefFactory most likely an actor system
     * @param timeout timeout for ask operation(s) used under the hood to implement the Future
@@ -66,4 +78,5 @@ package object oriana {
   def executeDBTransaction[Context <: DatabaseContext, T: Manifest, S <: NoStream, E <: Effect](op: DBTransaction[Context, T, S, E])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
     (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
   }
+
 }

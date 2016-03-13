@@ -2,16 +2,17 @@ name := "oriana"
 
 version := "1.0"
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.1"
+  val akkaVersion = "2.4.2"
   val slickVersion = "3.1.1"
   Seq(
     "org.scala-lang" % "scala-reflect" % scalaVersion.value,
 
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+    "com.typesafe.akka" %% "akka-stream" % akkaVersion,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
 
     "com.typesafe.slick" %% "slick" % slickVersion,
