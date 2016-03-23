@@ -1,6 +1,7 @@
+import akka.NotUsed
 import akka.actor.ActorRefFactory
 import akka.pattern.ask
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.util.Timeout
 import slick.dbio.{Streaming, DBIOAction, Effect, NoStream}
 
@@ -21,7 +22,15 @@ package object oriana {
     */
   type DBOperation[-Context <: ExecutableDatabaseContext, +Result] = (Context) => Future[Result]
 
-  type DBStreamOperation[-Context <: DatabaseContext, +Result, -E <: Effect] = (Context) => DBIOAction[Result, Streaming[Result], E]
+
+  /**
+    * Models a streamable DB operation. These operations should not modify state. Note the missing [DatabaseCommandExecution] type
+    * to prevent direct execution
+    * @tparam Context context type
+    * @tparam Result result type
+    * @tparam E effect type
+    */
+  type DBStreamOperation[-Context <: DatabaseContext, +Result, -E <: Effect] = (Context) => DBIOAction[_, Streaming[Result], E]
 
   /**
     * Syntactic sugar for access to the database. The block argument is scheduled as a [DBOperation] to the implicit
@@ -46,7 +55,28 @@ package object oriana {
     (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
   }
 
-  def executeAsSource[Context <: DatabaseContext, T, E <: Effect](op: DBStreamOperation[Context, T, E])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName) = {
+  /**
+    * Performs a database-using operation as a flow element.
+    * @param op operation to execute
+    * @param actorRefFactory factory for accessing the lower-level ([executeDBOperation] operation.
+    * @param timeout ask timeout for each execution
+    * @param ec context to use
+    * @param actorName adatabase actor name
+    * @tparam Context Context type (useful for table access)
+    * @tparam In input type
+    * @tparam Out output type
+    * @return flow modelling the specified transformation
+    */
+
+  def executeAsFlow[Context <: DatabaseContext, In, Out: Manifest](op: In => DBStreamOperation[Context, Out, _])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Flow[In, Out, NotUsed] = {
+    Flow[In] map op flatMapConcat (executeAsSource(_))
+  }
+
+  def executeAsSink[Context <: DatabaseContext, T](op: T => DBTransaction[Context, Unit, _, _], settings: DBSinkSettings = DBSinkSettings())(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Sink[T, NotUsed] = {
+    Sink.fromSubscriber(new TransactionSubscriber(op, settings))
+  }
+
+  def executeAsSource[Context <: DatabaseContext, T: Manifest](op: DBStreamOperation[Context, T, _])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName) = {
     Source.fromFuture(executeDBOperation { ctx: Context with ExecutableDatabaseContext =>
       val actions = op(ctx)
 
@@ -75,7 +105,7 @@ package object oriana {
     * @tparam T result type of the transaction
     * @return future with transaction result
     */
-  def executeDBTransaction[Context <: DatabaseContext, T: Manifest, S <: NoStream, E <: Effect](op: DBTransaction[Context, T, S, E])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
+  def executeDBTransaction[Context <: DatabaseContext, T: Manifest](op: DBTransaction[Context, T, _, _])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
     (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
   }
 
