@@ -1,9 +1,10 @@
 import akka.NotUsed
 import akka.actor.ActorRefFactory
 import akka.pattern.ask
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.javadsl.GraphDSL
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.Timeout
-import slick.dbio.{Streaming, DBIOAction, Effect, NoStream}
+import slick.dbio.{DBIOAction, Effect, NoStream, Streaming}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -61,7 +62,7 @@ package object oriana {
     * @param actorRefFactory factory for accessing the lower-level ([executeDBOperation] operation.
     * @param timeout ask timeout for each execution
     * @param ec context to use
-    * @param actorName adatabase actor name
+    * @param actorName database actor name
     * @tparam Context Context type (useful for table access)
     * @tparam In input type
     * @tparam Out output type
@@ -72,9 +73,25 @@ package object oriana {
     Flow[In] map op flatMapConcat (executeAsSource(_))
   }
 
-  def executeAsSink[Context <: DatabaseContext, T](op: T => DBTransaction[Context, Unit, _, _], settings: DBSinkSettings = DBSinkSettings())(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Sink[T, NotUsed] = {
-    Sink.fromSubscriber(new TransactionSubscriber(op, settings))
+  def executeAsSink[Context <: DatabaseContext, T](op: T => DBTransaction[Context, _, _, _], settings: DBSinkSettings = DBSinkSettings())(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Sink[T, Future[Int]] = {
+    val subscriber: TransactionSubscriber[Context, T] = new TransactionSubscriber(op, settings)
+    val flow = Flow.fromSinkAndSource(Sink.fromSubscriber(subscriber), Source.fromFuture(subscriber.future))
+    val complete = Sink.head[Int]
+
+    flow.toMat(complete)(Keep.right)
   }
+
+  /**
+    * Creates a source from a streamable database operation
+    * @param op operation
+    * @param actorRefFactory actor factory for communication to the database actor
+    * @param timeout ask timeout for the initial creation of the sink, not for each operation
+    * @param ec context to use
+    * @param actorName database actor name
+    * @tparam Context context type (useful for table access)
+    * @tparam T emitted type
+    * @return source backed by the passed DB operation
+    */
 
   def executeAsSource[Context <: DatabaseContext, T: Manifest](op: DBStreamOperation[Context, T, _])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName) = {
     Source.fromFuture(executeDBOperation { ctx: Context with ExecutableDatabaseContext =>
