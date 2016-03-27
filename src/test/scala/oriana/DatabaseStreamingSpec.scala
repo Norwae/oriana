@@ -10,10 +10,12 @@ import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.{FlatSpec, Matchers}
 import oriana.testdatabase.{DBContext, SingleTestTableAccess, TestDatabaseContext}
+import slick.dbio.DBIOAction
 
 import scala.collection.immutable.Seq
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem with ScalaFutures with Eventually {
   implicit val materializer = ActorMaterializer()
@@ -161,12 +163,46 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     }
   }
 
-  it should "cancel the stream on an error" in pending
-  it should "support squelching errors cancellation" in pending
+  it should "cancel the stream on an error" in {
+    val counter = new NextCounter(100)
+
+    implicit val name = initDatabase()
+
+    val source = Source.fromIterator[Int](() => counter.iterator)
+    val sink = executeAsSink { t: Int => ctx: TestDatabaseContext =>
+      DBIOAction.failed(new NullPointerException)
+    }
+    val materialized = source.toMat(sink)(Keep.right).run()
+
+    eventually(Timeout(10.seconds)) {
+      materialized.value.get shouldBe a [Failure[Int]]
+      counter.nextCalls shouldEqual 1
+    }
+  }
+
+  it should "support squelching errors cancellation" in {
+    val counter = new NextCounter(100)
+
+    implicit val name = initDatabase()
+
+    val source = Source.fromIterator[Int](() => counter.iterator)
+    val sink = executeAsSink({ t: Int => ctx: TestDatabaseContext =>
+      DBIOAction.failed(new NullPointerException)
+    }, DBSinkSettings(cancelOnError = _ => false))
+
+    val materialized = source.toMat(sink)(Keep.right).run()
+
+    whenReady(materialized, Timeout(100.seconds)){ count =>
+      materialized should be ('completed)
+      count shouldEqual 0
+      counter.nextCalls shouldEqual 100
+    }
+  }
 
 
   def initDatabase() = {
     val database = system.actorOf(DatabaseActor.props(new DBContext))
+    database ! NoRetrySchedule
     database ! DatabaseActor.Init
     DatabaseName(database.path)
   }

@@ -47,8 +47,9 @@ class TransactionSubscriber[Context <: DatabaseContext, T](op: (T) => DBTransact
         pending.decrementAndGet()
         completePromise()
         subscription.request(1)
-      case Failure(e) if settings.cancelOnError =>
+      case Failure(e) if settings.cancelOnError(e) =>
         subscription.cancel()
+        promise.failure(e)
         log.error(s"Cancelling stream after $total elements", e)
       case Failure(e) =>
         pending.decrementAndGet()

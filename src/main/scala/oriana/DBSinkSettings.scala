@@ -1,5 +1,5 @@
 package oriana
 
-case class DBSinkSettings(cancelOnError: Boolean = true, parallelism: Int = 1) {
+case class DBSinkSettings(cancelOnError: Throwable => Boolean = _ => true, parallelism: Int = 1) {
   require(parallelism >= 1)
 }
