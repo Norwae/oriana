@@ -15,7 +15,7 @@ import slick.dbio.DBIOAction
 import scala.collection.immutable.Seq
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem with ScalaFutures with Eventually {
   implicit val materializer = ActorMaterializer()
@@ -139,6 +139,26 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     whenReady(materialized) (_ shouldEqual 3)
   }
 
+
+  it should "pass along upstream failure to the materialized result" in {
+    class UpstreamFailureException extends Exception
+    implicit val name = initDatabase()
+
+    val source = Source.failed(new UpstreamFailureException)
+    val sink = executeAsSink { t: (Int, String) => ctx: TestDatabaseContext =>
+      import ctx.api._
+      SingleTestTableAccess.query += t
+    }
+    val materialized = source.toMat(sink)(Keep.right).run()
+
+    eventually(Timeout(10.seconds)) {
+      materialized should be('completed)
+      val value = materialized.value.get
+      value shouldBe a[Failure[_]]
+      value.failed.get shouldBe a[UpstreamFailureException]
+    }
+  }
+
   it should "support limited parallelism" in {
     implicit val name = initDatabase()
 
@@ -175,12 +195,12 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     val materialized = source.toMat(sink)(Keep.right).run()
 
     eventually(Timeout(10.seconds)) {
-      materialized.value.get shouldBe a [Failure[Int]]
+      materialized.value.get shouldBe a [Failure[_]]
       counter.nextCalls shouldEqual 1
     }
   }
 
-  it should "support squelching errors cancellation" in {
+  it should "support continuing after errors" in {
     val counter = new NextCounter(100)
 
     implicit val name = initDatabase()
