@@ -46,3 +46,10 @@ requiring intricate knowledge about the specifics of scheduling and initializati
 The above fragement likewise queries for the first unicorn, but if none is found, instead inserts a default value
 before returning it. This is executed transactionally, and any failures encountered within the block will
 cause a delay and retry with a given schedule.
+
+### Flows and Streams, oh my!
+
+Oriana integrates the database in all levels of Akka streams. Thus, it becomes easy, even natual to think of the
+database as a `Source` or as a `Sink` for some stream of data. Particularly in bulk import / export scenarios, this
+leads to very natural handling of data acquisition, transformation and storage. The build-in backpressure of akka streams
+allows to easily handle large datasets without danger of overloading your application or database.
