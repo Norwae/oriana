@@ -73,6 +73,21 @@ package object oriana {
     Flow[In] map op flatMapConcat (executeAsSource(_))
   }
 
+  /**
+    * Creates a sink that executes the specified database transaction for every element published to the stream. The sink
+    * has some options that can be set to modify its operation. The operation materializes a future that returns
+    * the number of successfully-processed transactions.
+    *
+    * @param op operation to perform
+    * @param settings settings for the sink
+    * @param actorRefFactory factory for accessing the lower-level ([executeDBOperation] operation.
+    * @param timeout ask timeout for each execution
+    * @param ec context to use
+    * @param actorName database actor name
+    * @tparam Context Context type (useful for table access)
+    * @tparam T input type
+    * @return sink instantiated to execute the specified transaction per-element.
+    */
   def executeAsSink[Context <: DatabaseContext, T](op: T => DBTransaction[Context, _, _, _], settings: DBSinkSettings = DBSinkSettings())(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Sink[T, Future[Int]] = {
     val subscriber: TransactionSubscriber[Context, T] = new TransactionSubscriber(op, settings)
     val flow = Flow.fromSinkAndSource(Sink.fromSubscriber(subscriber), Source.fromFuture(subscriber.future))
