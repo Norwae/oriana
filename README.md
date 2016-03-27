@@ -1,6 +1,8 @@
 # oriana
 Oriana binds slick and akka together in an elegant way
 
+[ ![Codeship Status for Norwae/oriana](https://codeship.com/projects/8e236ea0-d613-0133-8fbf-4e3a42acd1da/status?branch=master)](https://codeship.com/projects/142692)
+
 ## Features
 
 This libray provides two simple features
