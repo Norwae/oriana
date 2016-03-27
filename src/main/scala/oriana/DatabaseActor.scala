@@ -1,11 +1,12 @@
 package oriana
 
 import akka.actor.Status.Failure
-import akka.actor.{Props, Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, Props}
 import org.slf4j.LoggerFactory
 import slick.dbio.{Effect, NoStream}
 
 import scala.collection.mutable
+import scala.concurrent.Future
 
 /**
   * The central point of oriana, an actor that enables an init lifecycle for a database, and
@@ -45,14 +46,14 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
     case op: DBOperation[_, _] =>
       waiting += prepareOperation(op, NoRetrySchedule, sender())
       log.debug("queued a non-transactional operation")
-    case tr: DBTransaction[_, Any, NoStream, Effect] =>
+    case tr: DBTransaction[_, _, _, _] =>
       waiting += prepareTransaction(tr)
       log.debug("queued a transactional operation")
   }
 
   private val ready: Receive = changeSchedule orElse {
     case op: DBOperation[_, _] => prepareOperation(op, NoRetrySchedule, sender()) ! Start(dbAccess)
-    case tr: DBTransaction[_, Any, NoStream, Effect] => prepareTransaction(tr) ! Start(dbAccess)
+    case tr: DBTransaction[_, _, _, _] => prepareTransaction(tr) ! Start(dbAccess)
   }
 
   private val initializing: Receive = changeSchedule orElse bufferOperation orElse {
@@ -78,7 +79,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
 
   def receive = beforeInit
 
-  protected def prepareTransaction(tr: DBTransaction[_ <: DatabaseContext, Any, NoStream, Effect]): ActorRef = {
+  protected def prepareTransaction(tr: DBTransaction[_ <: DatabaseContext, _, NoStream, _]): ActorRef = {
     import dbAccess.api._
     val transactionalOperation = (tr.apply _).andThen(_.transactionally).andThen(dbAccess.database.run)
     val retrySchedule = tr.overrideRetrySchedule getOrElse schedule
