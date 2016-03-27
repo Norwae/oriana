@@ -7,7 +7,7 @@ import slick.dbio.{DBIOAction, Effect, NoStream}
   * all modifications that may have arisen simultaneously), or fail. If they fail, the oriana actors will
   * attempt the transaction again until its retry allowance is exhausted.
   *
-  * Note the absence of the [DatabaseCommandExecution]
+  * Note the absence of the [[DatabaseCommandExecution]]
   * trait in the `Context`, which prevents direct access to the database - and thus allows making the transaction retryable
   *
   * @tparam Context context subclass required by this transaction

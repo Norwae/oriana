@@ -10,7 +10,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 package object oriana {
   /**
-    * Context type for operations - mixes in the [DatabaseCommandExecution] trait in to grant access to the database
+    * Context type for operations - mixes in the [[DatabaseCommandExecution]] trait in to grant access to the database
     * object of the context
     */
   type ExecutableDatabaseContext = DatabaseContext with DatabaseCommandExecution

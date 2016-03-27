@@ -25,7 +25,7 @@ trait DatabaseContext {
   val api: driver.API
 
   /**
-    * All tables relevant in this context. Can be queried by the [DBInitializer] implementation to aid startup
+    * All tables relevant in this context. Can be queried by the [[DBInitializer]] implementation to aid startup
     *
     * @return all tables
     */

@@ -46,9 +46,6 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
   }
 }
 
-/**
-  * Companion object to [DBExecution]
-  */
 object DBExecution {
   /**
     * Generates a new DBExecution properties object
