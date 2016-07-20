@@ -9,7 +9,7 @@ import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.{FlatSpec, ShouldMatchers}
 import oriana.DBTransaction.FunctionalTransaction
 import oriana.DatabaseActor.Init
-import oriana.testdatabase.{DBContext, SingleTestTableAccess, TestDatabaseContext}
+import oriana.testdatabase.{DBContext, TestDatabaseContext}
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -24,7 +24,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
 
   implicit override val timeout = akka.util.Timeout(15.seconds)
   "the database actor (initialization)" should "delay operations until after initialization" in {
-    val actor = system.actorOf(DatabaseActor.props(new DBContext))
+    val actor = system.actorOf(DatabaseActor.props(new DBContext() with DatabaseCommandExecution))
     val executionTime = actor ? { ctx: DatabaseContext =>
       Future.successful(System.nanoTime())
     }
@@ -45,7 +45,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     actor ! DatabaseActor.Init
 
     val getToken = actor ? { ctx: TestDatabaseContext =>
-      ctx.database.run(SingleTestTableAccess.query.filter(_.id === 1).map(_.name).result.head)
+      ctx.database.run(ctx.table.filter(_.id === 1).map(_.name).result.head)
     }
 
     whenReady(getToken, Timeout(15.seconds)) { readToken =>
@@ -94,9 +94,9 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
   "the database actors execution mechanism" should "execute operations with a executable context" in {
     val actor = system.actorOf(DatabaseActor.props(new DBContext))
     actor ! Init
-    val insertResult = actor ? { context: ExecutableDatabaseContext =>
+    val insertResult = actor ? { ctx: TestDatabaseContext with DatabaseCommandExecution =>
 
-      context.database.run(SingleTestTableAccess.query +=(38, "Solidus"))
+      ctx.database.run(ctx.table +=(38, "Solidus"))
     }
 
     whenReady(insertResult.mapTo[Int]) { insertedRows =>
@@ -111,16 +111,16 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     val abortiveInsert = actor ? new DBTransaction[TestDatabaseContext, Int, NoStream, Effect.Write] {
       def apply(ctx: TestDatabaseContext) = {
         for {
-          _ <- SingleTestTableAccess.query +=(192, "Salamander")
+          _ <- ctx.table +=(192, "Salamander")
           if false
-          _ <- SingleTestTableAccess.query +=(111, "Sashimi")
+          _ <- ctx.table +=(111, "Sashimi")
         } yield 2
       }
     }
 
     whenReady(abortiveInsert.failed, Timeout(10.seconds)) { err =>
-      val countCreatedRows = actor ? { context: ExecutableDatabaseContext =>
-        context.database.run(SingleTestTableAccess.query.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
+      val countCreatedRows = actor ? { ctx: TestDatabaseContext with DatabaseCommandExecution =>
+        ctx.database.run(ctx.table.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
       }
 
       whenReady(countCreatedRows) { created =>
@@ -136,16 +136,16 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     val transactionalInsert = actor ? new DBTransaction[TestDatabaseContext, Int, NoStream, Effect.Write] {
       def apply(ctx: TestDatabaseContext) = {
         for {
-          _ <- SingleTestTableAccess.query +=(192, "Salamander")
-          _ <- SingleTestTableAccess.query +=(111, "Sashimi")
+          _ <- ctx.table +=(192, "Salamander")
+          _ <- ctx.table +=(111, "Sashimi")
         } yield 2
       }
     }
 
     whenReady(transactionalInsert, Timeout(10.seconds)) { result =>
       result shouldEqual 2
-      val countCreatedRows = actor ? { context: ExecutableDatabaseContext =>
-        context.database.run(SingleTestTableAccess.query.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
+      val countCreatedRows = actor ? { ctx: TestDatabaseContext with DatabaseCommandExecution  =>
+        ctx.database.run(ctx.table.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
       }
 
       whenReady(countCreatedRows) { created =>
@@ -278,15 +278,15 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     actor ! Init
 
     val retrievedTokenTransactional = executeDBTransaction { ctx: TestDatabaseContext =>
-      val action1 = SingleTestTableAccess.query +=(1, token)
-      val action2 = SingleTestTableAccess.query.filter(_.id === 1).result.head
+      val action1 = ctx.table +=(1, token)
+      val action2 = ctx.table.filter(_.id === 1).result.head
 
       action1.flatMap(_ => action2)
     }
 
     val retrievedToken = executeDBOperation { ctx: TestDatabaseContext with DatabaseCommandExecution =>
-      val action1 = SingleTestTableAccess.query +=(12, token)
-      val action2 = SingleTestTableAccess.query.filter(_.id === 12).result.head
+      val action1 = ctx.table +=(12, token)
+      val action2 = ctx.table.filter(_.id === 12).result.head
 
       ctx.database.run(action1.flatMap(_ => action2))
     }
@@ -302,18 +302,18 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
 
 object DatabaseActorSpec {
 
-  class TokenInitializer(token: String) extends DBInitializer {
-    override def apply(v1: ExecutableDatabaseContext) = {
-      import v1.api._
+  class TokenInitializer(token: String) extends DBInitializer[TestDatabaseContext with DatabaseCommandExecution] {
+    import slick.driver.H2Driver.api._
+    override def apply(ctx: TestDatabaseContext with DatabaseCommandExecution) = {
       val actions = for {
-        _ <- SingleTestTableAccess.createDDL
-        _ <- SingleTestTableAccess.query +=(1, token)
+        _ <- ctx.allTables.head.createDDL
+        _ <- ctx.table +=(1, token)
       } yield DatabaseActor.InitComplete
-      v1.database.run(actions)
+      ctx.database.run(actions)
     }
   }
 
-  class FailingInitializer extends DBInitializer {
+  class FailingInitializer extends DBInitializer[ExecutableDatabaseContext] {
     override def apply(v1: ExecutableDatabaseContext) = Future.failed(new IOException("Forced failure for initialization"))
   }
 

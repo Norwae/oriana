@@ -8,7 +8,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Simple initializer that executes create DDL for any missing tables. Does not
   * care or have capability to provide an initial data load.
   */
-object SchemaCreateInitializer extends DBInitializer {
+object SchemaCreateInitializer extends DBInitializer[ExecutableDatabaseContext] {
   /**
     * Tests for each tables existence, and creates it if it is missing
     * @param ctx context

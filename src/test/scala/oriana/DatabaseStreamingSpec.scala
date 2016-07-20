@@ -9,13 +9,13 @@ import akka.stream.{ActorMaterializer, ThrottleMode}
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.{FlatSpec, Matchers}
-import oriana.testdatabase.{DBContext, SingleTestTableAccess, TestDatabaseContext}
+import oriana.testdatabase.{DBContext, TestDatabaseContext}
 import slick.dbio.DBIOAction
 
 import scala.collection.immutable.Seq
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import scala.util.Failure
 
 class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem with ScalaFutures with Eventually {
   implicit val materializer = ActorMaterializer()
@@ -27,31 +27,11 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     putInitial(target) {
       val src = executeAsSource { ctx: DBContext =>
         import ctx.api._
-        SingleTestTableAccess.query.result
+        ctx.table.result
       }
 
       whenReady(src.runWith(Sink.seq): Future[Seq[(Int, String)]]) { it =>
         it should contain theSameElementsInOrderAs target
-      }
-    }
-  }
-
-  it should "be throttled by later stages" in {
-    implicit val name = initDatabase()
-
-    val target = Seq(1 -> UUID.randomUUID().toString, 2 -> UUID.randomUUID().toString, 3 -> UUID.randomUUID().toString)
-    putInitial(target) {
-      val src = executeAsSource { ctx: DBContext =>
-        import ctx.api._
-        SingleTestTableAccess.query.result
-      }
-
-      val throttled: Source[LocalDateTime, NotUsed] = src.map(_ => LocalDateTime.now).throttle(1, 1.second, 1, ThrottleMode.Shaping)
-      whenReady(throttled.runWith(Sink.seq): Future[Seq[LocalDateTime]], Timeout(5.seconds)) { it =>
-        it.size shouldEqual 3
-        val reference = it.head.toEpochSecond(ZoneOffset.UTC)
-        it(1).toEpochSecond(ZoneOffset.UTC) shouldEqual reference + 1 +- 1
-        it(1).toEpochSecond(ZoneOffset.UTC) shouldEqual reference + 2 +- 1
       }
     }
   }
@@ -64,7 +44,7 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
       val flow: Flow[Int, String, NotUsed] = executeAsFlow { i: Int => { ctx: TestDatabaseContext =>
         import ctx.api._
         (for {
-          row <- SingleTestTableAccess.query
+          row <- ctx.table
           if row.id === i
         } yield row.name).result
       }
@@ -89,7 +69,7 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
       val flow: Flow[Int, String, NotUsed] = executeAsFlow { i: Int => ctx: TestDatabaseContext =>
         import ctx.api._
         (for {
-          row <- SingleTestTableAccess.query
+          row <- ctx.table
           if row.id >= i
         } yield row.name).result
       }
@@ -109,14 +89,14 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     val source = Source(target)
     val sink = executeAsSink { t: (Int, String) => ctx: TestDatabaseContext =>
       import ctx.api._
-      SingleTestTableAccess.query += t
+      ctx.table += t
     }
     source.to(sink).run()
 
     eventually(Timeout(10.seconds)) {
       val selected = executeDBOperation { ctx: DBContext =>
         import ctx.api._
-        ctx.database.run(SingleTestTableAccess.query.result)
+        ctx.database.run(ctx.table.result)
       }
 
       whenReady(selected, Timeout(1.second)) { created =>
@@ -132,7 +112,7 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     val source = Source(target)
     val sink = executeAsSink { t: (Int, String) => ctx: TestDatabaseContext =>
       import ctx.api._
-      SingleTestTableAccess.query += t
+      ctx.table += t
     }
     val materialized = source.toMat(sink)(Keep.right).run()
 
@@ -147,7 +127,7 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     val source = Source.failed(new UpstreamFailureException)
     val sink = executeAsSink { t: (Int, String) => ctx: TestDatabaseContext =>
       import ctx.api._
-      SingleTestTableAccess.query += t
+      ctx.table += t
     }
     val materialized = source.toMat(sink)(Keep.right).run()
 
@@ -166,7 +146,7 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
     val source = Source(target)
     val sink = executeAsSink({ t: (Int, String) => ctx: TestDatabaseContext =>
       import ctx.api._
-      SingleTestTableAccess.query += t
+      ctx.table += t
     }, DBSinkSettings(parallelism = 10))
     val materialized = source.toMat(sink)(Keep.right).run()
 
@@ -174,7 +154,7 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
       materialized shouldEqual 200
       val selected = executeDBOperation { ctx: DBContext =>
         import ctx.api._
-        ctx.database.run(SingleTestTableAccess.query.result)
+        ctx.database.run(ctx.table.result)
       }
 
       whenReady(selected, Timeout(1.second)) { created =>
@@ -230,7 +210,7 @@ class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem 
   def putInitial[T](values: Seq[(Int, String)])(body: => T)(implicit name: DatabaseName) = {
     whenReady(executeDBTransaction { ctx: DBContext =>
       import ctx.api._
-      SingleTestTableAccess.query ++= values
+      ctx.table ++= values
     }, Timeout(5.seconds))(_ => body)
   }
 
