@@ -8,7 +8,7 @@ scalaVersion := "2.11.8"
 
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.2"
+  val akkaVersion = "2.4.7"
   val slickVersion = "3.1.1"
   Seq(
     "org.scala-lang" % "scala-reflect" % scalaVersion.value,

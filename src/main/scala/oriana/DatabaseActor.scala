@@ -33,7 +33,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
   private val log = LoggerFactory.getLogger(classOf[DatabaseActor])
 
   private var schedule: RetrySchedule = DefaultSchedule
-  private var init: DBInitializer = SchemaCreateInitializer
+  private var init: DBInitializer[_] = SchemaCreateInitializer
   private val waiting = mutable.Buffer[ActorRef]()
 
   private val changeSchedule: Receive = {
@@ -68,7 +68,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
   }
 
   private val beforeInit: Receive = changeSchedule orElse ({
-    case init: DBInitializer =>
+    case init: DBInitializer[_] =>
       this.init = init
       log.info(s"Set database initializer to an ${init.getClass.getName}")
     case Init =>

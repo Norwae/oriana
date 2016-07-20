@@ -45,10 +45,11 @@ trait DatabaseCommandExecution { self: DatabaseContext =>
   * still needs to be determined "by hand", or by calling the alternate constructor, which offers a way to determine it
   * by configuration
  *
-  * @param driver driver object to use
+  * @param _driver driver object to use
   * @param config configuration of the database. Project it down to the required sub-configuration before passing
   */
-class SimpleDatabaseContext(val driver: JdbcProfile, config: Config) {
+abstract class SimpleDatabaseContext(_driver: JdbcProfile, config: Config) extends DatabaseContext {
+  implicit val driver = _driver
   /**
     * Alternate constructor for deriving the driver from the configuration.
     *

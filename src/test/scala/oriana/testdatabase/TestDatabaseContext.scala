@@ -1,12 +1,15 @@
 package oriana.testdatabase
 
 import com.typesafe.config.ConfigFactory
-import oriana.{DatabaseCommandExecution, DatabaseContext, SimpleDatabaseContext}
+import oriana.{SimpleDatabaseContext, TableAccess}
+import slick.lifted.TableQuery
 
 import scala.collection.JavaConversions._
 
-class TestDatabaseContext extends SimpleDatabaseContext(ConfigFactory.parseMap(Map("url" -> createJdbcUrl(), "type" -> "H2"))) with DatabaseContext {
-  val allTables = List(SingleTestTableAccess)
+class TestDatabaseContext extends SimpleDatabaseContext(ConfigFactory.parseMap(Map("url" -> createJdbcUrl(), "type" -> "H2"))) {
+  val table = TableQuery[SingleTestTable]
+  val allTables: List[TableAccess[_]] = List(table)
+
 }
 
 

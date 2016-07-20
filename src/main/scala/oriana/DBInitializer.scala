@@ -5,4 +5,4 @@ package oriana
   * reaches it. They may be simple (as in, create tables if absent) or elaborate. The init process
   * needs to be complete before the first "user" operation can be attempted.
   */
-trait DBInitializer extends DBOperation[ExecutableDatabaseContext, DatabaseActor.InitComplete.type]
+trait DBInitializer[-InitCtx <: ExecutableDatabaseContext] extends DBOperation[InitCtx, DatabaseActor.InitComplete.type]
