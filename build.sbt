@@ -6,7 +6,7 @@ description := "Oriana is a small layer on top of slick that allows easier acces
 
 organization := "com.github.norwae"
 
-version := "1.0.1-SNAPSHOT"
+version := "1.0.2-SNAPSHOT"
 
 scalaVersion := "2.11.8"
 
