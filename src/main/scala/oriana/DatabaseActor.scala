@@ -46,14 +46,14 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
     case op: DBOperation[_, _] =>
       waiting += prepareOperation(op, NoRetrySchedule, sender())
       log.debug("queued a non-transactional operation")
-    case tr: DBTransaction[_, _, _, _] =>
+    case tr: DBTransaction[_, _] =>
       waiting += prepareTransaction(tr)
       log.debug("queued a transactional operation")
   }
 
   private val ready: Receive = changeSchedule orElse {
     case op: DBOperation[_, _] => prepareOperation(op, NoRetrySchedule, sender()) ! Start(dbAccess)
-    case tr: DBTransaction[_, _, _, _] => prepareTransaction(tr) ! Start(dbAccess)
+    case tr: DBTransaction[_, _] => prepareTransaction(tr) ! Start(dbAccess)
   }
 
   private val initializing: Receive = changeSchedule orElse bufferOperation orElse {
@@ -79,7 +79,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
 
   def receive = beforeInit
 
-  protected def prepareTransaction(tr: DBTransaction[_ <: DatabaseContext, _, NoStream, _]): ActorRef = {
+  protected def prepareTransaction[Ctx <: DatabaseContext](tr: DBTransaction[Ctx, _]): ActorRef = {
     import dbAccess.api._
     val transactionalOperation = (tr.apply _).andThen(_.transactionally).andThen(dbAccess.database.run)
     val retrySchedule = tr.overrideRetrySchedule getOrElse schedule

@@ -4,14 +4,14 @@ package oriana
 
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{FlatSpec, ShouldMatchers}
+import org.scalatest.{FlatSpec, Matchers}
 import slick.dbio.Effect.{Read, Write}
 import slick.dbio.{DBIOAction, NoStream}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
-class SchemaCreateInitializerSpec extends FlatSpec with ShouldMatchers with ScalaFutures {
+class SchemaCreateInitializerSpec extends FlatSpec with Matchers with ScalaFutures {
   import testdatabase._
 
   def insertAndQueryExampleDataFromTable(ctx: TestDatabaseContext with DatabaseCommandExecution): DBIOAction[Seq[Int], NoStream, Write with Read] = {

@@ -6,7 +6,7 @@ import akka.actor.{ActorRefFactory, Props}
 import akka.pattern.ask
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 
-import org.scalatest.{ShouldMatchers, FlatSpec}
+import org.scalatest.{Matchers, FlatSpec}
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.collection.mutable
@@ -15,7 +15,7 @@ import scala.concurrent.duration._
 
 import scala.concurrent.Future
 
-class DBExecutionSpec extends FlatSpec with TestActorSystem with ScalaFutures with ShouldMatchers {
+class DBExecutionSpec extends FlatSpec with TestActorSystem with ScalaFutures with Matchers {
   import DBExecutionSpec._
   "the db execution actor" should "execute its operation when signaled" in {
     val token = UUID.randomUUID()

@@ -1,12 +1,12 @@
 package oriana
 
 import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
-import org.scalatest.{ShouldMatchers, FlatSpec}
+import org.scalatest.{Matchers, FlatSpec}
 
 import scala.concurrent.duration._
 import scala.collection.JavaConversions._
 
-class RetryScheduleSpec extends FlatSpec with ShouldMatchers {
+class RetryScheduleSpec extends FlatSpec with Matchers {
   "The no-retry schedule" should "always return None" in {
     NoRetrySchedule.retryDelay(1) shouldEqual None
   }

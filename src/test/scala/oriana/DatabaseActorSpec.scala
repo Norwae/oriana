@@ -6,20 +6,19 @@ import java.util.UUID
 import akka.pattern.ask
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.{FlatSpec, ShouldMatchers}
+import org.scalatest.{FlatSpec, Matchers}
 import oriana.DBTransaction.FunctionalTransaction
 import oriana.DatabaseActor.Init
 import oriana.testdatabase.{DBContext, TestDatabaseContext}
 
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSystem with ScalaFutures with Eventually {
+class DatabaseActorSpec extends FlatSpec with Matchers with TestActorSystem with ScalaFutures with Eventually {
 
   import DatabaseActorSpec._
-  import slick.driver.H2Driver.api._
+  import slick.jdbc.H2Profile.api._
 
 
   implicit override val timeout = akka.util.Timeout(15.seconds)
@@ -72,7 +71,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     }
     def askForTime(`with`: Any = now) = (actor ? `with`).mapTo[Long]
 
-    val nowFromTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+    val nowFromTx = new DBTransaction[TestDatabaseContext, Long] {
       override def apply(context: TestDatabaseContext) = DBIO.successful(System.nanoTime())
     }
 
@@ -108,7 +107,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     val actor = system.actorOf(DatabaseActor.props(new DBContext))
     actor ! Init
 
-    val abortiveInsert = actor ? new DBTransaction[TestDatabaseContext, Int, NoStream, Effect.Write] {
+    val abortiveInsert = actor ? new DBTransaction[TestDatabaseContext, Int] {
       def apply(ctx: TestDatabaseContext) = {
         for {
           _ <- ctx.table +=(192, "Salamander")
@@ -120,7 +119,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
 
     whenReady(abortiveInsert.failed, Timeout(10.seconds)) { err =>
       val countCreatedRows = actor ? { ctx: TestDatabaseContext with DatabaseCommandExecution =>
-        ctx.database.run(ctx.table.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
+        ctx.database.run(ctx.table.filter(row => row.id === 192 || row.id === 111).distinct.length.result)
       }
 
       whenReady(countCreatedRows) { created =>
@@ -133,7 +132,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     val actor = system.actorOf(DatabaseActor.props(new DBContext))
     actor ! Init
 
-    val transactionalInsert = actor ? new DBTransaction[TestDatabaseContext, Int, NoStream, Effect.Write] {
+    val transactionalInsert = actor ? new DBTransaction[TestDatabaseContext, Int] {
       def apply(ctx: TestDatabaseContext) = {
         for {
           _ <- ctx.table +=(192, "Salamander")
@@ -145,7 +144,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     whenReady(transactionalInsert, Timeout(10.seconds)) { result =>
       result shouldEqual 2
       val countCreatedRows = actor ? { ctx: TestDatabaseContext with DatabaseCommandExecution  =>
-        ctx.database.run(ctx.table.filter(row => row.id === 192 || row.id === 111).countDistinct.result)
+        ctx.database.run(ctx.table.filter(row => row.id === 192 || row.id === 111).distinct.length.result)
       }
 
       whenReady(countCreatedRows) { created =>
@@ -173,7 +172,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     actor ! Init
     val attemptTimes = mutable.Buffer[Long]()
 
-    val badTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+    val badTx = new DBTransaction[TestDatabaseContext, Long] {
       override def apply(context: TestDatabaseContext) = {
         attemptTimes += System.nanoTime()
         DBIO.failed(new IOException())
@@ -199,7 +198,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     actor ! Init
     val attemptTimes = mutable.Buffer[Long]()
 
-    val badTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+    val badTx = new DBTransaction[TestDatabaseContext, Long] {
       override def apply(context: TestDatabaseContext) = {
         attemptTimes += System.nanoTime()
         DBIO.failed(new IOException())
@@ -226,7 +225,7 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
     actor ! new FixedRetrySchedule(175.millis)
     val attemptTimes = mutable.Buffer[Long]()
 
-    val badTx = new DBTransaction[TestDatabaseContext, Long, NoStream, Effect] {
+    val badTx = new DBTransaction[TestDatabaseContext, Long] {
       override def apply(context: TestDatabaseContext) = {
         attemptTimes += System.nanoTime()
         DBIO.failed(new IOException())
@@ -301,9 +300,10 @@ class DatabaseActorSpec extends FlatSpec with ShouldMatchers with TestActorSyste
 
 
 object DatabaseActorSpec {
+  import scala.concurrent.ExecutionContext.Implicits.global
 
   class TokenInitializer(token: String) extends DBInitializer[TestDatabaseContext with DatabaseCommandExecution] {
-    import slick.driver.H2Driver.api._
+    import slick.jdbc.H2Profile.api._
     override def apply(ctx: TestDatabaseContext with DatabaseCommandExecution) = {
       val actions = for {
         _ <- ctx.allTables.head.createDDL

@@ -1,7 +1,7 @@
 package oriana
 
 import com.typesafe.config.Config
-import slick.driver._
+import slick.jdbc._
 
 /**
   * Database context encapsulate a driver, its api and a list of all tables. You are encouraged to add members
@@ -70,16 +70,19 @@ abstract class SimpleDatabaseContext(_driver: JdbcProfile, config: Config) exten
     */
   def this(config: Config) = this({
     config.getString("type") match {
-      case "H2" => H2Driver
-      case "MySQL" => MySQLDriver
-      case "Postgres" => PostgresDriver
-      case "Derby" => DerbyDriver
-      case "Hsqldb" => HsqldbDriver
-      case "SQLite" => SQLiteDriver
+      case "H2" => H2Profile
+      case "MySQL" => MySQLProfile
+      case "Postgres" => PostgresProfile
+      case "Derby" => DerbyProfile
+      case "Hsqldb" => HsqldbProfile
+      case "SQLite" => SQLiteProfile
+      case "Oracle" => OracleProfile
+      case "SQLServer" => SQLServerProfile
+      case "DB2" => DB2Profile
     }
   }, config)
   val api = driver.api
-  val database = connectToDatabase()
+  val database: driver.backend.Database = connectToDatabase()
 
   protected def connectToDatabase(): driver.backend.Database = driver.backend.createDatabase(config, "")
 }

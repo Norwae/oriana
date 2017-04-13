@@ -88,7 +88,7 @@ package object oriana {
     * @tparam T input type
     * @return sink instantiated to execute the specified transaction per-element.
     */
-  def executeAsSink[Context <: DatabaseContext, T](op: T => DBTransaction[Context, _, _, _], settings: DBSinkSettings = DBSinkSettings())(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Sink[T, Future[Int]] = {
+  def executeAsSink[Context <: DatabaseContext, T](op: T => DBTransaction[Context, _], settings: DBSinkSettings = DBSinkSettings())(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Sink[T, Future[Int]] = {
     val subscriber: TransactionSubscriber[Context, T] = new TransactionSubscriber(op, settings)
     val flow = Flow.fromSinkAndSource(Sink.fromSubscriber(subscriber), Source.fromFuture(subscriber.future))
     val complete = Sink.head[Int]
@@ -137,7 +137,7 @@ package object oriana {
     * @tparam T result type of the transaction
     * @return future with transaction result
     */
-  def executeDBTransaction[Context <: DatabaseContext, T: Manifest](op: DBTransaction[Context, T, _, _])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
+  def executeDBTransaction[Context <: DatabaseContext, T: Manifest](op: DBTransaction[Context, T])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
     (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
   }
 

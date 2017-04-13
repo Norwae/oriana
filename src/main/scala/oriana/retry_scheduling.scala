@@ -2,7 +2,7 @@ package oriana
 
 import com.typesafe.config.Config
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 
@@ -52,7 +52,7 @@ class FixedRetrySchedule(retries: FiniteDuration*) extends RetrySchedule {
   * @param config (sub-)configuration searched for the "retry_db_delay_millis"
   */
 class ConfiguredRetrySchedule(config: Config) extends FixedRetrySchedule({
-  config.getNumberList("retry_db_delay_millis").map(_.intValue.millis)
+  config.getNumberList("retry_db_delay_millis").asScala.map(_.intValue.millis)
 } : _*)
 
 /**

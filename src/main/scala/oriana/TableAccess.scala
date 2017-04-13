@@ -2,7 +2,7 @@ package oriana
 
 import slick.dbio.Effect.Schema
 import slick.dbio.{DBIOAction, NoStream}
-import slick.driver.JdbcProfile
+import slick.jdbc.JdbcProfile
 import slick.lifted._
 
 /**

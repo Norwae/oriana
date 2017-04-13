@@ -6,18 +6,18 @@ description := "Oriana is a small layer on top of slick that allows easier acces
 
 organization := "com.github.norwae"
 
-version := "1.0.2-SNAPSHOT"
+scalacOptions := Seq("-deprecation")
 
-scalaVersion := "2.11.8"
+version := "1.1.0-SNAPSHOT"
+
+scalaVersion := "2.12.1"
 
 publishMavenStyle := true
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.10"
-  val slickVersion = "3.1.1"
+  val akkaVersion = "2.4.17"
+  val slickVersion = "3.2.0"
   Seq(
-    "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
@@ -26,7 +26,7 @@ libraryDependencies ++= {
     "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
 
     "com.h2database" % "h2" % "1.4.191" % "test",
-    "org.scalatest" %% "scalatest" % "2.2.6" % "test"
+    "org.scalatest" %% "scalatest" % "3.0.1" % "test"
   )
 }
 

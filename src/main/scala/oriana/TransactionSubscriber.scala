@@ -22,7 +22,7 @@ import slick.dbio.{Effect, NoStream}
   * @tparam Context context type
   * @tparam T input type
   */
-class TransactionSubscriber[Context <: DatabaseContext, T](op: (T) => DBTransaction[Context, _, _, _], settings: DBSinkSettings)(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName) extends Subscriber[T] {
+class TransactionSubscriber[Context <: DatabaseContext, T](op: (T) => DBTransaction[Context, _], settings: DBSinkSettings)(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName) extends Subscriber[T] {
   private val log = LoggerFactory.getLogger(classOf[TransactionSubscriber[_, _]])
   private val total = new AtomicInteger(0)
   private val success = new AtomicInteger(0)
