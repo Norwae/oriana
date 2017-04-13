@@ -12,6 +12,8 @@ version := "1.1.0-SNAPSHOT"
 
 scalaVersion := "2.12.1"
 
+crossScalaVersions := Seq("2.11.8")
+
 publishMavenStyle := true
 
 libraryDependencies ++= {
