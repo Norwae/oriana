@@ -8,7 +8,7 @@ organization := "com.github.norwae"
 
 scalacOptions := Seq("-deprecation")
 
-version := "1.1.0-SNAPSHOT"
+version := "1.1.1-SNAPSHOT"
 
 scalaVersion := "2.12.1"
 

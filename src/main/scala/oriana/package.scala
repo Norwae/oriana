@@ -1,10 +1,10 @@
 import akka.NotUsed
 import akka.actor.ActorRefFactory
 import akka.pattern.ask
-import akka.stream.javadsl.GraphDSL
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.Timeout
-import slick.dbio.{DBIOAction, Effect, NoStream, Streaming}
+import slick.dbio.{DBIOAction, Effect, Streaming}
+
 
 import scala.concurrent.{ExecutionContext, Future}
 
