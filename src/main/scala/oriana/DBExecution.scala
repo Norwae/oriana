@@ -16,15 +16,19 @@ import scala.util.{Failure, Success}
   * @tparam DBContext context type
   * @tparam T result type
   */
-class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule, target: ActorRef) extends Actor {
+class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperation[DBContext, T], retrySchedule: RetrySchedule, target: ActorRef, monitor: Monitor) extends Actor {
   private var retryCount = 0
   private val exceptions = mutable.Buffer[Throwable]()
+
+
+  override def preStart(): Unit = monitor.operationPending()
 
   override def receive = {
     case Start(ctx) =>
       operation(ctx.asInstanceOf[DBContext]) onComplete {
         case Failure(e: NoRetry) =>
           exceptions.foreach(e.addSuppressed)
+          monitor.operationFailed()
           reportCalculationResult(FailureStatus(e))
         case Failure(e) =>
           retrySchedule.retryDelay(retryCount) match {
@@ -34,9 +38,12 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
               context.system.scheduler.scheduleOnce(delay, self, Start(ctx))
             case None =>
               exceptions.foreach(e.addSuppressed)
+              monitor.operationFailed()
               reportCalculationResult(FailureStatus(e))
           }
-        case Success(value) => reportCalculationResult(value)
+        case Success(value) =>
+          monitor.operationSucceeded()
+          reportCalculationResult(value)
       }
   }
 
@@ -56,5 +63,5 @@ object DBExecution {
     * @tparam T result type
     * @return props for the given set of parameters
     */
-  def props[DBContext <: ExecutableDatabaseContext, T](op: DBOperation[DBContext, T], schedule: RetrySchedule, target: ActorRef) = Props(new DBExecution[DBContext, T](op, schedule, target))
+  def props[DBContext <: ExecutableDatabaseContext, T](op: DBOperation[DBContext, T], schedule: RetrySchedule, target: ActorRef, watch: Monitor) = Props(new DBExecution[DBContext, T](op, schedule, target, watch))
 }

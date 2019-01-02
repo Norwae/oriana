@@ -8,17 +8,17 @@ organization := "com.github.norwae"
 
 scalacOptions := Seq("-deprecation")
 
-version := "1.1.1-SNAPSHOT"
+version := "1.2.0-SNAPSHOT"
 
-scalaVersion := "2.12.1"
+scalaVersion := "2.12.6"
 
 crossScalaVersions := Seq("2.11.8")
 
 publishMavenStyle := true
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.17"
-  val slickVersion = "3.2.0"
+  val akkaVersion = "2.5.19"
+  val slickVersion = "3.2.3"
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
@@ -26,6 +26,9 @@ libraryDependencies ++= {
 
     "com.typesafe.slick" %% "slick" % slickVersion,
     "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
+
+    "io.prometheus" % "simpleclient" % "0.6.0" % Optional,
+    
 
     "com.h2database" % "h2" % "1.4.191" % "test",
     "org.scalatest" %% "scalatest" % "3.0.1" % "test"

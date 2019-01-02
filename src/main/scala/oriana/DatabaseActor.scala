@@ -35,9 +35,14 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
   private var schedule: RetrySchedule = DefaultSchedule
   private var init: DBInitializer[_] = SchemaCreateInitializer
   private val waiting = mutable.Buffer[ActorRef]()
+  private var monitor: Monitor = NopMonitor
 
-  private val changeSchedule: Receive = {
-    case schedule: RetrySchedule =>
+  private val internals: Receive = {
+    case ExecuteTimeout ⇒ monitor.executeTimeout()
+    case m: Monitor ⇒
+      log.info(s"Installed new monitor")
+      monitor = m
+    case schedule: RetrySchedule ⇒
       this.schedule = schedule
       log.info("Installed new default retry schedule")
   }
@@ -51,12 +56,12 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
       log.debug("queued a transactional operation")
   }
 
-  private val ready: Receive = changeSchedule orElse {
+  private val ready: Receive = internals orElse {
     case op: DBOperation[_, _] => prepareOperation(op, NoRetrySchedule, sender()) ! Start(dbAccess)
     case tr: DBTransaction[_, _] => prepareTransaction(tr) ! Start(dbAccess)
   }
 
-  private val initializing: Receive = changeSchedule orElse bufferOperation orElse {
+  private val initializing: Receive = internals orElse bufferOperation orElse {
     case InitComplete =>
       log.info(s"Init complete, now starting ${waiting.size} waiting tasks")
       waiting.foreach(_ ! Start(dbAccess))
@@ -67,7 +72,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
       throw e
   }
 
-  private val beforeInit: Receive = changeSchedule orElse ({
+  private val beforeInit: Receive = internals orElse ({
     case init: DBInitializer[_] =>
       this.init = init
       log.info(s"Set database initializer to an ${init.getClass.getName}")
@@ -87,7 +92,9 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
     prepareOperation(transactionalOperation, retrySchedule, sender())
   }
 
-  protected def prepareOperation(dbOperation: DBOperation[_,_], schedule: RetrySchedule, target: ActorRef) = context.actorOf(DBExecution.props(dbOperation, schedule, target))
+  protected def prepareOperation(dbOperation: DBOperation[_,_], schedule: RetrySchedule, target: ActorRef) = {
+    context.actorOf(DBExecution.props(dbOperation, schedule, target, monitor))
+  }
 
   protected def initialize() = prepareOperation(init, NoRetrySchedule, self) ! Start(dbAccess)
 }
@@ -95,6 +102,7 @@ class DatabaseActor(dbAccess: ExecutableDatabaseContext) extends Actor {
 object DatabaseActor {
   case object Init
   case object InitComplete
+  case object ExecuteTimeout
 
   def props(ctx: ExecutableDatabaseContext) = Props(new DatabaseActor(ctx))
 }

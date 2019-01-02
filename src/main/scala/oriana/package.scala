@@ -1,12 +1,12 @@
 import akka.NotUsed
 import akka.actor.ActorRefFactory
-import akka.pattern.ask
+import akka.pattern.{AskTimeoutException, ask}
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.Timeout
 import slick.dbio.{DBIOAction, Effect, Streaming}
 
-
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Failure
 
 package object oriana {
   /**
@@ -33,6 +33,12 @@ package object oriana {
     */
   type DBStreamOperation[-Context <: DatabaseContext, +Result, -E <: Effect] = (Context) => DBIOAction[_, Streaming[Result], E]
 
+  private def reportTimeouts[A](implicit name: DatabaseName, arf: ActorRefFactory): PartialFunction[Throwable, Future[A]] = {
+    case askTimeout : AskTimeoutException ⇒
+      arf.actorSelection(name.name) ! DatabaseActor.ExecuteTimeout
+      Future.failed(askTimeout)
+  }
+
   /**
     * Syntactic sugar for access to the database. The block argument is scheduled as a [DBOperation] to the implicit
     * database.
@@ -53,7 +59,7 @@ package object oriana {
     * @return future with operation result
     */
   def executeDBOperation[T: Manifest](op: DBOperation[_ <: ExecutableDatabaseContext, T])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
-    (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
+    (actorRefFactory.actorSelection(actorName.name) ? op).recoverWith(reportTimeouts).mapTo[T]
   }
 
   /**
@@ -138,7 +144,7 @@ package object oriana {
     * @return future with transaction result
     */
   def executeDBTransaction[Context <: DatabaseContext, T: Manifest](op: DBTransaction[Context, T])(implicit actorRefFactory: ActorRefFactory, timeout: Timeout, ec: ExecutionContext, actorName: DatabaseName): Future[T] = {
-    (actorRefFactory.actorSelection(actorName.name) ? op).mapTo[T]
+    (actorRefFactory.actorSelection(actorName.name) ? op).recoverWith(reportTimeouts).mapTo[T]
   }
 
 }

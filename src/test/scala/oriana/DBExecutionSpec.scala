@@ -124,7 +124,7 @@ object DBExecutionSpec {
 
   def performOperationViaExecutionActor[Result](schedule: FiniteDuration*)(op: DBOperation[ExecutableDatabaseContext, Result])(implicit system: ActorRefFactory, timeout: akka.util.Timeout) = {
     val captor = system.actorOf(Props[SingleMessageCaptor])
-    val execution = system.actorOf(DBExecution.props(op, new FixedRetrySchedule(schedule :_*), captor))
+    val execution = system.actorOf(DBExecution.props(op, new FixedRetrySchedule(schedule :_*), captor, NopMonitor))
 
     execution ! Start(null)
 
