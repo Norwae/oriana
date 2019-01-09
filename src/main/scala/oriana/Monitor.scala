@@ -20,12 +20,12 @@ object NopMonitor extends Monitor {
 }
 
 object PrometheusMonitor extends Monitor {
-  private val pending = Gauge.build("oriana.pending", "Number of currently pending operations").create()
-  private val timeouts = Counter.build("oriana.timeout", "Timeouts encountered in execute* family functions").create()
+  private [oriana] val pending = Gauge.build("oriana_pending", "Number of currently pending operations").create()
+  private [oriana] val timeouts = Counter.build("oriana_timeout", "Timeouts encountered in execute* family functions").create()
 
-  private val retries = Counter.build("oriana.retry", "Retries attempted for db transactions").create()
-  private val success = Counter.build("oriana.success", "Successful DB operations").create()
-  private val failure = Counter.build("oriana.success", "Failed DB operations").create()
+  private [oriana] val retries = Counter.build("oriana_retry", "Retries attempted for db transactions").create()
+  private [oriana] val success = Counter.build("oriana_success", "Successful DB operations").create()
+  private [oriana] val failure = Counter.build("oriana_success", "Failed DB operations").create()
 
   override def executeTimeout(): Unit = timeouts.inc()
 
