@@ -49,6 +49,12 @@ The above fragment likewise queries for the first unicorn, but if none is found,
 before returning it. This is executed transactionally, and any failures encountered within the block will
 cause a delay and retry with a given schedule.
 
+### Monitoring 
+
+Oriana has the ability to report usage statistics of the underlying database layer. These statistics
+can be exported in any format, but for ease of use, a prometheus implementation is provided (if the
+optional dependency is fulfilled)
+
 ### Flows and Streams, oh my!
 
 Oriana integrates the database in all levels of Akka streams. Thus, it becomes easy, even natural to think of the

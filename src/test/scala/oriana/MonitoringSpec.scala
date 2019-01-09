@@ -22,7 +22,7 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
     implicit val actorName = DatabaseName("/user/" + childName)
     val sut = system.actorOf(DatabaseActor.props(new DBContext), childName)
     private val _stats = new CounterStats
-    sut ! NoInit
+    sut ! ExternalInitializer
     sut ! DatabaseActor.Init
     sut ! _stats
 
