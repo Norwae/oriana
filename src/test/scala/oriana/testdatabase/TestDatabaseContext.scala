@@ -6,7 +6,10 @@ import slick.lifted.TableQuery
 
 import scala.collection.JavaConverters._
 
-class TestDatabaseContext extends SimpleDatabaseContext(ConfigFactory.parseMap(Map("url" -> createJdbcUrl(), "type" -> "H2").asJava)) {
+class TestDatabaseContext  extends SimpleDatabaseContext({
+  org.h2.Driver.load()
+  ConfigFactory.parseMap(Map("url" -> createJdbcUrl(), "type" -> "H2").asJava)
+}) {
   val table = TableQuery[SingleTestTable]
   val allTables: List[TableAccess[_]] = List(table)
 

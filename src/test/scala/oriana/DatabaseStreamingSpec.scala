@@ -18,7 +18,6 @@ import scala.concurrent.duration._
 import scala.util.Failure
 
 class DatabaseStreamingSpec extends FlatSpec with Matchers with TestActorSystem with ScalaFutures with Eventually {
-  implicit val materializer = ActorMaterializer()
 
   "the source element" should "provide elements to the consumers" in {
     implicit val name = initDatabase()

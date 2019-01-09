@@ -35,6 +35,7 @@ class DBExecution[DBContext <: ExecutableDatabaseContext, T](operation: DBOperat
             case Some(delay) =>
               exceptions += e
               retryCount += 1
+              monitor.operationRetry()
               context.system.scheduler.scheduleOnce(delay, self, Start(ctx))
             case None =>
               exceptions.foreach(e.addSuppressed)
