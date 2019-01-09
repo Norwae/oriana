@@ -1,7 +1,6 @@
 package oriana
 
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 import akka.actor.PoisonPill
 import akka.util.Timeout
@@ -9,8 +8,8 @@ import org.scalatest.{FlatSpec, Matchers}
 import oriana.testdatabase.DBContext
 import slick.dbio.{DBIOAction, Effect, NoStream}
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 import scala.util.Random
 
 class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
@@ -27,6 +26,8 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
     sut ! DatabaseActor.Init
     sut ! _stats
 
+    def waitFor(f: Future[Any]) = Await.ready(f, 1.second)
+
     def evaluateStats() = {
       sut ! PoisonPill
       _stats
@@ -34,11 +35,10 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
   }
 
   "The ask-timeout counter" should "be incremented by executeDBOperation timeouts" in new ConfiguredSUT {
-    val f = executeDBOperation { ctx: ExecutableDatabaseContext ⇒
+    waitFor(executeDBOperation { ctx: ExecutableDatabaseContext ⇒
       Future.never
-    }
+    })
 
-    Await.ready(f, 1.second)
     val stats = evaluateStats()
     stats.timeout shouldEqual 1
     stats.pending shouldEqual 1
@@ -48,11 +48,10 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
   }
 
   it should "be incremented by executeDBTransaction timeouts" in new ConfiguredSUT {
-    val f = executeDBTransaction { ctx: DatabaseContext ⇒
+    waitFor(executeDBTransaction { ctx: DatabaseContext ⇒
       DBIOAction.from(Future.never)
-    }
+    })
 
-    Await.ready(f, 1.second)
     val stats = evaluateStats()
     stats.timeout shouldEqual 1
     stats.pending shouldEqual 1
@@ -62,11 +61,10 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
   }
 
   "Successful operations counter" should "be incremented by successes" in new ConfiguredSUT {
-    val f = executeDBOperation { ctx: ExecutableDatabaseContext ⇒
+    waitFor(executeDBOperation { ctx: ExecutableDatabaseContext ⇒
       Future.successful(17)
-    }
+    })
 
-    Await.ready(f, 1.second)
     val stats = evaluateStats()
     stats.timeout shouldEqual 0
     stats.pending shouldEqual 1
@@ -76,11 +74,10 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
   }
 
   "Failed operation counter" should "be incremented by final failures" in new ConfiguredSUT {
-    val f = executeDBOperation { ctx: ExecutableDatabaseContext ⇒
+    waitFor(executeDBOperation { ctx: ExecutableDatabaseContext ⇒
       Future.failed(new IOException)
-    }
+    })
 
-    Await.ready(f, 1.second)
     val stats = evaluateStats()
     stats.timeout shouldEqual 0
     stats.pending shouldEqual 1
@@ -90,7 +87,7 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
   }
 
   it should "not be incremented by retries that finally succeeded" in new ConfiguredSUT {
-    val f = executeDBTransaction(new DBTransaction[DatabaseContext, Int] {
+    waitFor(executeDBTransaction(new DBTransaction[DatabaseContext, Int] {
       var count = 0
       override def apply(context: DatabaseContext): DBIOAction[Int, NoStream, Effect.Read with Effect.Write] =
         if (count < 3) {
@@ -101,9 +98,8 @@ class MonitoringSpec extends FlatSpec with Matchers with TestActorSystem {
 
       override def overrideRetrySchedule: Option[RetrySchedule] =
         Some(new FixedRetrySchedule(10.millis, 10.millis, 10.millis))
-    })
+    }))
 
-    Await.ready(f, 1.second)
     val stats = evaluateStats()
     stats.timeout shouldEqual 0
     stats.pending shouldEqual 1
